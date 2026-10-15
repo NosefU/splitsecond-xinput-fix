@@ -28,11 +28,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: splitsecond-xinput-fix
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
-          body_path: INSTALL.txt
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+          body_path: RELEASE_NOTES.md

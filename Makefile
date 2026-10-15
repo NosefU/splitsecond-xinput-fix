@@ -48,12 +48,16 @@ $(BUILD)/linux/ssfix-install: installer/ssfix_install.c $(BUILD)/payload/payload
 	@mkdir -p $(dir $@)
 	$(CC_LINUX) $(CFLAGS) -std=c99 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -static -s -I$(BUILD)/payload -o $@ $<
 
+# Release archives: one per platform, each with its installer and INSTALL.txt.
+# The Linux one is a tarball so the installer keeps its executable bit.
 dist: all
-	@rm -rf $(DIST)/$(PKG) && mkdir -p $(DIST)/$(PKG)
-	cp $(BUILD)/win/ssfix-install.exe $(BUILD)/linux/ssfix-install $(BUILD)/xinput1_3.dll $(DIST)/$(PKG)/
-	cp INSTALL.txt $(DIST)/$(PKG)/
-	cd $(DIST) && rm -f $(PKG).zip && zip -qr $(PKG).zip $(PKG)
-	@echo $(DIST)/$(PKG).zip
+	@rm -rf $(DIST) && mkdir -p $(DIST)/$(PKG)-windows $(DIST)/$(PKG)-linux
+	cp $(BUILD)/win/ssfix-install.exe INSTALL.txt $(DIST)/$(PKG)-windows/
+	cp $(BUILD)/linux/ssfix-install INSTALL.txt $(DIST)/$(PKG)-linux/
+	chmod 755 $(DIST)/$(PKG)-linux/ssfix-install
+	cd $(DIST) && zip -qr $(PKG)-windows.zip $(PKG)-windows
+	cd $(DIST) && tar -czf $(PKG)-linux.tar.gz $(PKG)-linux
+	@ls -1 $(DIST)/*.zip $(DIST)/*.tar.gz
 
 clean:
 	rm -rf $(BUILD) $(DIST)

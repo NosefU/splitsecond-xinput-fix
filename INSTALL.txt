@@ -11,9 +11,9 @@ Split/Second gamepad fix
 изменённый data/resident.ark.
 
 Состав
-  ssfix-install.exe   установщик для Windows
-  ssfix-install       установщик для Linux / Steam Deck
-  xinput1_3.dll       сам фикс (уже встроен в оба установщика)
+  ssfix-install.exe   установщик для Windows (архив *-windows.zip)
+  ssfix-install       установщик для Linux / Steam Deck (архив *-linux.tar.gz)
+Всё нужное (DLL фикса и правки файлов игры) встроено в установщик.
 
 Windows
   1. Скопируйте ssfix-install.exe в папку игры (рядом с SplitSecond.exe) и запустите.
@@ -27,8 +27,8 @@ Steam Deck / Linux (Proton)
      SplitSecond.exe).
   2. Откройте терминал в этой папке (в Dolphin: правой кнопкой по пустому месту ->
      "Открыть терминал") и выполните:
-         chmod +x ssfix-install
          ./ssfix-install
+     (если система ответит "Permission denied", сначала: chmod +x ssfix-install)
      Или оставьте ssfix-install где угодно и укажите папку игры (путь ниже - только
      пример, замените его на папку, куда установлена ваша игра):
          ./ssfix-install "/home/deck/Games/Split Second"
@@ -69,7 +69,7 @@ game folder as an argument), then start the game.
 
 Steam Deck / Linux: copy ssfix-install into the game folder, open a terminal
 there (Dolphin: right-click -> Open Terminal Here) and run
-    chmod +x ssfix-install && ./ssfix-install
+    ./ssfix-install
 (or run it from anywhere with your game folder as the argument:
 ./ssfix-install "/path/to/your/Split Second"). Then add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%

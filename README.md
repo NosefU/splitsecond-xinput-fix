@@ -32,8 +32,10 @@ compatible) should work the same way on Windows.
 
 ## Installation
 
-Download the latest `splitsecond-xinput-fix-*.zip` from
-[Releases](../../releases) and unpack it. Everything the fix needs is built into the installers.
+Download the archive for your system from [Releases](../../releases) and unpack it:
+`splitsecond-xinput-fix-*-windows.zip` for Windows, `splitsecond-xinput-fix-*-linux.tar.gz` for
+Steam Deck / Linux. Each contains a single installer with everything the fix needs, plus
+`INSTALL.txt`.
 
 ### Windows
 
@@ -50,13 +52,13 @@ No DirectX installation is needed for the fix itself.
 2. Open a terminal in that folder (in Dolphin: right-click an empty spot → **Open Terminal Here**)
    and run:
    ```
-   chmod +x ssfix-install
    ./ssfix-install
    ```
+   (if it says "Permission denied", run `chmod +x ssfix-install` first)
+
    Or keep `ssfix-install` anywhere and pass the game folder — replace the path below with the
    folder where *your* copy of the game is installed:
    ```
-   chmod +x ssfix-install
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
 3. In Steam, open the game's **Properties → Launch Options** and add:

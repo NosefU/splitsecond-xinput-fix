@@ -33,8 +33,10 @@ XInput-геймпад (Xbox 360 / One / Series или совместимый).
 
 ## Установка
 
-Скачайте последний `splitsecond-xinput-fix-*.zip` из [релизов](../../releases) и распакуйте.
-Всё необходимое уже встроено в установщики.
+Скачайте из [релизов](../../releases) архив для своей системы и распакуйте:
+`splitsecond-xinput-fix-*-windows.zip` для Windows, `splitsecond-xinput-fix-*-linux.tar.gz` для
+Steam Deck / Linux. В каждом — один установщик, в который встроено всё необходимое, и
+`INSTALL.txt`.
 
 ### Windows
 
@@ -51,13 +53,13 @@ XInput-геймпад (Xbox 360 / One / Series или совместимый).
 2. Откройте терминал в этой папке (в Dolphin: правой кнопкой по пустому месту →
    **Открыть терминал**) и выполните:
    ```
-   chmod +x ssfix-install
    ./ssfix-install
    ```
+   (если система ответит «Permission denied», сначала выполните `chmod +x ssfix-install`)
+
    Или оставьте `ssfix-install` где угодно и укажите папку игры — замените путь ниже на папку,
    куда установлена *ваша* игра:
    ```
-   chmod +x ssfix-install
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
 3. В Steam откройте **Свойства → Параметры запуска** игры и добавьте:

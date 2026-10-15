@@ -11,15 +11,16 @@ Requires `make`, `i686-w64-mingw32-gcc`, a C compiler for Linux (static build: `
 make dll                     # build/xinput1_3.dll
 make diag                    # build/diag/xinput1_3.dll — research build
 make all CC_LINUX=musl-gcc   # DLL + installers build/win/ssfix-install.exe, build/linux/ssfix-install
-make dist CC_LINUX=musl-gcc  # dist/splitsecond-xinput-fix-<version>.zip
+make dist CC_LINUX=musl-gcc  # dist/splitsecond-xinput-fix-<version>-windows.zip and -linux.tar.gz
 ```
 
 On macOS: `brew install mingw-w64 zig`, then
 `make dist CC_LINUX="zig cc -target x86_64-linux-musl"`. The version comes from `git describe`.
 
 The DLL and the diffs are built into both installers (`tools/embed.py` →
-`build/payload/payload.h`), so a single file is enough to install. The release archive contains
-both installers, `xinput1_3.dll` (for manual installation) and `INSTALL.txt`.
+`build/payload/payload.h`), so a single file is enough to install. There is one release archive per platform: the Windows
+zip has `ssfix-install.exe`, the Linux tarball has `ssfix-install` (a tarball keeps its executable
+bit); both include `INSTALL.txt`. The sources are attached by GitHub itself.
 
 ## UI diffs
 
@@ -55,8 +56,8 @@ archive gives the same bytes.
 ## CI
 
 `.github/workflows/build.yml` builds the DLL and both installers on Ubuntu
-(`gcc-mingw-w64-i686`, `musl-gcc`) on every push and PR and uploads the zip as an artifact. On a
-`v*` tag the same zip is attached to a GitHub release, with `INSTALL.txt` as the release text:
+(`gcc-mingw-w64-i686`, `musl-gcc`) on every push and PR and uploads both archives as an artifact. On a
+`v*` tag they are attached to a GitHub release, with `RELEASE_NOTES.md` as the release text:
 
 ```
 git tag v1.0.0 && git push origin v1.0.0
@@ -72,6 +73,7 @@ patch/*.ssdf              UI movie diffs
 ui/*.as                   ActionScript 2 inserted into the movies
 tools/                    tools for unpacking and building the game's resources
 docs/                     documentation
-INSTALL.txt               instructions for the release archive
+INSTALL.txt               instructions for the release archives
+RELEASE_NOTES.md          GitHub release text
 Makefile                  build
 ```

@@ -11,15 +11,16 @@
 make dll                     # build/xinput1_3.dll
 make diag                    # build/diag/xinput1_3.dll — исследовательская сборка
 make all CC_LINUX=musl-gcc   # DLL + установщики build/win/ssfix-install.exe, build/linux/ssfix-install
-make dist CC_LINUX=musl-gcc  # dist/splitsecond-xinput-fix-<версия>.zip
+make dist CC_LINUX=musl-gcc  # dist/splitsecond-xinput-fix-<версия>-windows.zip и -linux.tar.gz
 ```
 
 На macOS: `brew install mingw-w64 zig`, затем
 `make dist CC_LINUX="zig cc -target x86_64-linux-musl"`. Версия берётся из `git describe`.
 
 DLL и диффы встраиваются в оба установщика (`tools/embed.py` → `build/payload/payload.h`), так
-что для установки нужен только один файл. В архив релиза кладутся оба установщика,
-`xinput1_3.dll` (для ручной установки) и `INSTALL.txt`.
+что для установки нужен только один файл. Архивов релиза два, по платформам: в zip для Windows —
+`ssfix-install.exe`, в tar.gz для Linux — `ssfix-install` (tar сохраняет признак исполняемого
+файла); в обоих — `INSTALL.txt`. Исходники к релизу GitHub прикрепляет сам.
 
 ## Диффы интерфейса
 
@@ -54,8 +55,8 @@ ActionScript. Скрипт извлекает два ролика, собира�
 ## CI
 
 `.github/workflows/build.yml` на каждый push и PR собирает DLL и оба установщика на Ubuntu
-(`gcc-mingw-w64-i686`, `musl-gcc`) и выкладывает zip как артефакт. На тег `v*` тот же zip
-прикрепляется к GitHub-релизу, текст релиза берётся из `INSTALL.txt`:
+(`gcc-mingw-w64-i686`, `musl-gcc`) и выкладывает оба архива как артефакт. На тег `v*` они
+прикрепляются к GitHub-релизу, текст релиза берётся из `RELEASE_NOTES.md`:
 
 ```
 git tag v1.0.0 && git push origin v1.0.0
@@ -71,6 +72,7 @@ patch/*.ssdf              диффы роликов интерфейса
 ui/*.as                   ActionScript 2, вставляемый в ролики
 tools/                    инструменты для разбора и сборки ресурсов игры
 docs/                     документация
-INSTALL.txt               инструкция для архива релиза
+INSTALL.txt               инструкция для архивов релиза
+RELEASE_NOTES.md          текст GitHub-релиза
 Makefile                  сборка
 ```

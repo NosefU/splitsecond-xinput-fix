@@ -1,0 +1,16 @@
+build/
+dist/
+__pycache__/
+*.pyc
+.venv/
+
+# game files and things extracted from them
+*.ark
+*.ark.orig
+*.gfx
+*.bin
+*.dds
+*.png
+*.exe
+*.dll
+tools/arkdump

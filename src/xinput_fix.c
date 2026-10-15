@@ -13,6 +13,7 @@
  *      [0xd8c104] != 0  -> race paused / results
  * 2. HUD hints: a hook on the function that expands *ACTION_...* tokens in
  *    messages, so they show the gamepad button icon (see below).
+ * 3. Controls reset after installation (see "Controls reset").
  *
  * Addresses are for SplitSecond.exe with TimeDateStamp 0x4be3ea74 and
  * SizeOfImage 0x1a64000; with any other exe the proxy only forwards XInput.
@@ -20,8 +21,12 @@
  *
  * Log: %USERPROFILE%\Documents\ss_xinput_fix.log */
 #include <windows.h>
+#include <shlobj.h>
 #include <stdio.h>
 #include <string.h>
+
+/* Lets the installer recognise this DLL, whatever its version. */
+__attribute__((used)) static const char ssfix_marker[] = "SSFIX-XINPUT-PROXY";
 
 #define EXPECTED_TIMESTAMP  0x4be3ea74
 #define EXPECTED_IMAGESIZE  0x1a64000
@@ -313,6 +318,121 @@ static BOOL install_expand_hook(void)
     return TRUE;
 }
 
+/* ---- Controls reset ----
+ * The installer leaves ssfix_reset_controls next to the exe. While it exists,
+ * the joystick (Joy 0) and keyboard profiles are set to the layout below, which
+ * the menu mapping and HUD icons assume. The save file is encrypted, so the
+ * game has to write it itself: once it has been saved after the reset, the
+ * marker is deleted and later changes made in the options are kept.
+ * Records cover binding slots 0x1c..0x36: { key, joystick code, joystick kind, flags }
+ * (field 0 of each record is the slot's action id, slot + 13, and is not touched). */
+#define RESET_FIRST_SLOT 0x1c
+#define RESET_SLOTS      27
+
+static const int reset_joystick[RESET_SLOTS][4] = {
+    { 87, 5, 1, 0 }, { 83, 4, 1, 0 }, { 65, 1, 1, 0 }, { 68, 0, 1, 0 },  /* throttle RT, brake LT, steer LS */
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 50, 0, 3, 0 }, { 49, 0, 3, 0 },
+    { 81, 3, 0, 0 }, { 69, 5, 3, 0 }, { 82, 4, 0, 0 }, { 0, 0, 3, 0 },   /* camera Y, LB */
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 },
+    { 84, 9, 1, 0 }, { 71, 8, 1, 0 }, { 70, 7, 1, 0 }, { 72, 6, 1, 0 },  /* look: right stick */
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 0, 0, 3, 0 },
+    { 27, 7, 3, 0 }, { 49, 0, 0, 0 }, { 50, 1, 0, 0 }, { 0, 6, 3, 0 },   /* PowerPlay 1 A, 2 B */
+    { 0, 0, 3, 0 },
+};
+static const int reset_keyboard[RESET_SLOTS][4] = {
+    { 38, 5, 1, 0 }, { 40, 4, 1, 0 }, { 37, 1, 1, 0 }, { 39, 0, 1, 0 },  /* arrows */
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 57, 0, 0, 0 }, { 56, 0, 0, 0 },
+    { 67, 3, 0, 0 }, { 79, 5, 0, 0 }, { 80, 4, 0, 0 }, { 0, 0, 3, 0 },
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 },
+    { 104, 9, 1, 0 }, { 98, 8, 1, 0 }, { 100, 7, 1, 0 }, { 102, 6, 1, 0 },  /* numpad */
+    { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 0, 0, 3, 0 }, { 0, 0, 3, 0 },
+    { 27, 7, 0, 0 }, { 163, 0, 0, 0 }, { 161, 1, 0, 0 }, { 0, 6, 0, 0 },  /* Esc, right Ctrl / Shift */
+    { 0, 0, 3, 0 },
+};
+
+static char reset_marker[MAX_PATH], save_dir[MAX_PATH];
+static ULONGLONG reset_done_at;  /* newest save time when the layout was last written */
+
+static ULONGLONG newest_save_time(void)
+{
+    char pattern[MAX_PATH + 8];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    ULONGLONG newest = 0;
+    snprintf(pattern, sizeof(pattern), "%s\\*.sav", save_dir);
+    if ((h = FindFirstFileA(pattern, &fd)) == INVALID_HANDLE_VALUE) return 0;
+    do
+    {
+        ULONGLONG t = (ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32 | fd.ftLastWriteTime.dwLowDateTime;
+        if (t > newest) newest = t;
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    return newest;
+}
+
+static BOOL reset_init(void)
+{
+    char *slash;
+    GetModuleFileNameA(NULL, reset_marker, sizeof(reset_marker));
+    if (!(slash = strrchr(reset_marker, '\\'))) return FALSE;
+    lstrcpyA(slash + 1, "ssfix_reset_controls");
+    if (GetFileAttributesA(reset_marker) == INVALID_FILE_ATTRIBUTES) return FALSE;
+    if (SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, save_dir) != S_OK) return FALSE;
+    lstrcatA(save_dir, "\\Disney Interactive Studios\\Split Second");
+    logmsg("controls reset pending");
+    return TRUE;
+}
+
+/* Returns the profile record block if it looks like the expected layout. */
+static int *profile_slots(BYTE *profiles, int count, int index, int type)
+{
+    BYTE *e;
+    int s;
+    if (index >= count) return NULL;
+    e = profiles + index * PROFILE_SIZE;
+    if (*(int *)(e + PROFILE_TYPE) != type || *(int *)(e + PROFILE_TYPE + 4) != 0) return NULL;
+    for (s = 0; s < RESET_SLOTS; s++)
+        if (*(int *)(e + (RESET_FIRST_SLOT + s) * BINDING_SIZE) != RESET_FIRST_SLOT + s + 13) return NULL;
+    return (int *)(e + RESET_FIRST_SLOT * BINDING_SIZE);
+}
+
+/* Called about once a second while the marker exists; returns FALSE when finished. */
+static BOOL reset_step(void)
+{
+    BYTE *mgr = *(BYTE **)ADDR_INPUT_PROFILES, *profiles;
+    int *joy, *kbd, s, count;
+    BOOL changed = FALSE;
+    if (!mgr || !(profiles = *(BYTE **)(mgr + 0xcf70))) return TRUE;
+    count = *(int *)(mgr + 0xcf6c);
+    if (!(joy = profile_slots(profiles, count, 0, 0)) || !(kbd = profile_slots(profiles, count, 1, 1))) return TRUE;
+    for (s = 0; s < RESET_SLOTS; s++)
+    {
+        if (memcmp(joy + s * 5 + 1, reset_joystick[s], sizeof(reset_joystick[s])))
+        {
+            memcpy(joy + s * 5 + 1, reset_joystick[s], sizeof(reset_joystick[s]));
+            changed = TRUE;
+        }
+        if (memcmp(kbd + s * 5 + 1, reset_keyboard[s], sizeof(reset_keyboard[s])))
+        {
+            memcpy(kbd + s * 5 + 1, reset_keyboard[s], sizeof(reset_keyboard[s]));
+            changed = TRUE;
+        }
+    }
+    if (changed || !reset_done_at)
+    {
+        if (changed) logmsg("controls reset to the gamepad layout");
+        reset_done_at = newest_save_time() + 1;
+        return TRUE;
+    }
+    if (newest_save_time() >= reset_done_at)
+    {
+        DeleteFileA(reset_marker);
+        logmsg("controls saved, reset finished");
+        return FALSE;
+    }
+    return TRUE;
+}
+
 #ifdef DIAG
 static void diag_log_bindings(void)
 {
@@ -372,7 +492,8 @@ static void read_inputs(const XGAMEPAD *pad, const BOOL *prev, BOOL *cur)
 
 static DWORD WINAPI pad_thread(void *arg)
 {
-    BOOL prev[IN_COUNT] = {0}, armed[IN_COUNT] = {0}, menu_prev = FALSE, hooked = FALSE;
+    BOOL prev[IN_COUNT] = {0}, armed[IN_COUNT] = {0}, menu_prev = FALSE, hooked = FALSE, resetting;
+    DWORD next_reset = 0;
     DWORD next_repeat[IN_COUNT] = {0};
     int i;
     (void)arg;
@@ -385,6 +506,7 @@ static DWORD WINAPI pad_thread(void *arg)
     load_real();
     if (!p_GetState) return 0;
     logmsg("gamepad fix active");
+    resetting = reset_init();
 #ifdef DIAG
     {
         char mpath[MAX_PATH];
@@ -405,6 +527,11 @@ static DWORD WINAPI pad_thread(void *arg)
 
         Sleep(10);
         if (!hooked) hooked = install_expand_hook();
+        if (resetting && (LONG)(now - next_reset) >= 0)
+        {
+            resetting = reset_step();
+            next_reset = now + 1000;
+        }
         menu = in_menu();
 #ifdef DIAG
         {

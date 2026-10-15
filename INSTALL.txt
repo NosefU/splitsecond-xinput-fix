@@ -1,0 +1,71 @@
+Split/Second gamepad fix
+========================
+
+[RU]
+
+Управление геймпадом во всех меню, иконки кнопок Xbox вместо клавиш в подсказках
+меню, на заставке и в подсказках во время гонки.
+
+Работает с SplitSecond.exe PC-версии с меткой сборки 4BE3EA74 (установщик это
+проверяет и откажется работать с другой версией). Нужен оригинальный, не
+изменённый data/resident.ark.
+
+Состав
+  ssfix-install.exe   установщик для Windows
+  ssfix-install       установщик для Linux / Steam Deck
+  xinput1_3.dll       сам фикс (уже встроен в оба установщика)
+
+Windows
+  1. Скопируйте ssfix-install.exe в папку игры (рядом с SplitSecond.exe) и запустите.
+     Или запустите откуда угодно, передав папку игры:
+         ssfix-install.exe "C:\Games\Split Second"
+  2. Запустите игру. Управление один раз сбросится на раскладку, под которую
+     рассчитан фикс.
+
+Steam Deck / Linux (Proton)
+  1. Скопируйте ssfix-install на Deck и запустите в Konsole (режим рабочего стола):
+         chmod +x ssfix-install
+         ./ssfix-install "/home/deck/Games/Split Second"
+  2. В Steam: свойства игры -> Параметры запуска, добавьте:
+         WINEDLLOVERRIDES="xinput1_3=n,b" %command%
+     (без этого Proton не загрузит DLL из папки игры)
+  3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
+  4. Запустите игру. Управление один раз сбросится на раскладку фикса.
+
+Геймпад
+  В меню:   D-pad / левый стик - выбор, A - подтвердить, B - назад,
+            X / Y - дополнительные действия из строки подсказок, Start - назад
+  В гонке:  по настройкам игры (RT - газ, LT - тормоз, левый стик - руль,
+            A / B - PowerPlay 1 / 2 уровня, Y - камера), Start - пауза
+
+Удаление
+  Запустите в папке игры "Uninstall gamepad fix.bat" (Windows) или
+  uninstall-gamepad-fix.sh (Linux / Steam Deck) - установщик кладёт их туда сам.
+  Либо: ssfix-install --uninstall "<папка игры>".
+Архив восстанавливается байт в байт по data/resident.ark.ssfix, DLL удаляется
+(прежняя xinput1_3.dll возвращается из xinput1_3.dll.bak), скрипт удаления и
+папка ssfix\ тоже удаляются.
+
+Лог: Documents\ss_xinput_fix.log (в Proton - внутри префикса игры,
+.../pfx/drive_c/users/steamuser/Documents/)
+
+
+[EN]
+
+Gamepad navigation in all menus; Xbox button icons instead of keyboard keys in
+the menu hints, on the title screen and in race hints.
+
+Works with SplitSecond.exe of the PC release with build timestamp 4BE3EA74 (the
+installer checks it). Needs the original, unmodified data/resident.ark.
+
+Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
+game folder as an argument), then start the game.
+
+Steam Deck / Linux: run ./ssfix-install "<game folder>" from a terminal, add
+    WINEDLLOVERRIDES="xinput1_3=n,b" %command%
+to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
+
+On the first start the controls are reset once to the layout the fix expects.
+To uninstall, run "Uninstall gamepad fix.bat" (Windows) or
+uninstall-gamepad-fix.sh (Linux) in the game folder; the archive is restored
+byte for byte.

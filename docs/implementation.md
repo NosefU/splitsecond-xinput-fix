@@ -1,0 +1,150 @@
+# How the fix works
+
+**English** | [Русский](implementation.ru.md)
+
+The fix consists of an `xinput1_3.dll` proxy placed next to `SplitSecond.exe`, changes to two UI
+movies inside `data/resident.ark`, and an installer that applies and removes all of it.
+
+All addresses below are for `SplitSecond.exe` with `TimeDateStamp 0x4BE3EA74` and
+`SizeOfImage 0x1A64000` (the SecuROM-protected PC release). With any other exe the proxy changes
+nothing and only forwards XInput calls.
+
+## XInput proxy (`src/xinput_fix.c`)
+
+The game imports only `XInputSetState` (rumble) from `xinput1_3.dll`; it reads the gamepad itself
+through DirectInput (device "Joy 0"). The proxy exports the same functions with the same ordinals
+(`src/xinput1_3.def`), forwards them to the system XInput (`xinput1_3`, falling back to
+`xinput1_4` or `xinput9_1_0`) and starts a thread that does the rest.
+
+### Menu navigation
+
+The thread polls the gamepad 100 times a second. While the game is in a menu (front-end, pause,
+results), button presses are turned into key presses with `SendInput`:
+
+| Gamepad | In menus | In races |
+|---|---|---|
+| D-pad / left stick | arrow keys (with auto-repeat) | — |
+| A / B | Enter / Esc | — |
+| X / Y | Space / Tab | — |
+| Start | Esc | Esc (pause) |
+
+A button held while the game switches between menu and race only acts after it is released. In
+races the proxy stays out of the way: sticks, triggers and buttons reach the game through
+DirectInput as bound in its options. The game pauses only on Esc, so Start → Esc is always active.
+
+Menus and races are told apart by two globals in the exe's `.data`, found by comparing memory
+snapshots taken in different game states:
+
+- `[0xD4456C] == 0` — not in a race (front-end);
+- `[0xD8C104] != 0` — the race is paused or the results are shown.
+
+### Button icons in race hints
+
+Hint texts are stored with tokens: `PRESS *ACTION_THROTTLE* TO ACCELERATE`. The function at
+`0x562350` (`cdecl (const char *action, String *out)`) expands a token into the name of the key
+or axis bound for the device the game considers active (`[[0xD65E08] + 0x6C]`). If it returns
+`UNKNOWN`, the token stays in the text as is; such tokens (`*BTN_RT*`, `*BLUE_PP*`, …) are turned
+into images by the HUD movie `Hud.gfx` through `setImageSubstitutions`.
+
+The proxy hooks that function (a jump to its own function; the first 7 bytes move to a trampoline).
+For the listed actions it reads the binding from the joystick profile and returns an image token:
+
+| Binding | Token |
+|---|---|
+| axis Z− / Z+ (triggers) | `*BTN_RT*` / `*BTN_LT*` |
+| axes X/Y (left stick) | `*BTN_LS*` |
+| buttons 0 / 1 / 8 | `*BTN_A*` / `*BTN_B*` / `*BTN_L3*` |
+| X, Y, LB, RB, Back, Start, right stick | a short label (`X`, `Y`, `LB`, …) |
+
+If the action is not bound on the gamepad, the original function runs.
+
+Control profiles: `[0xD656C8]` → object, `+0xCF6C` — number of profiles, `+0xCF70` — array of
+`0x584`-byte profiles. In a profile, `+0x564` is the device type (1 — keyboard), `+0x568` — its
+index. Bindings are 20-byte records starting at slot `0x1C`:
+`{ action id, key (VK), joystick code, kind, 0 }`, where kind 0 is a button, 1 an axis, 3 unbound.
+Slots: throttle `0x1C`, brake `0x1D`, steering `0x1E`/`0x1F`, camera `0x24`, look `0x2A–0x2D`,
+PowerPlay `0x33`/`0x34`.
+
+The game code is encrypted by SecuROM and decrypted in memory at startup, so the hook is installed
+as soon as the function's bytes match the expected ones (prologue and
+`mov edi, "ACTION_THROTTLE"` at `+0x8C`).
+
+### Controls reset
+
+The hints and the menu mapping assume a layout with the gamepad bound as Joy 0 (RT throttle,
+LT brake, left stick steering, A/B PowerPlay, Y camera, right stick look) and the keyboard on the
+arrow keys. By default the game has no gamepad bindings, so the installer leaves an
+`ssfix_reset_controls` marker next to the exe. While it exists, the proxy sets this layout in
+profiles 0 (joystick) and 1 (keyboard) once a second — only if the profile structure looks as
+expected.
+
+The save file (`Documents\Disney Interactive Studios\Split Second\*.sav`) is encrypted, so the
+game has to write it itself. As soon as the save file is updated after the reset, the marker is
+deleted and later changes in the controls options are kept as usual.
+
+### Log
+
+`%USERPROFILE%\Documents\ss_xinput_fix.log` (on Proton: inside the prefix,
+`.../pfx/drive_c/users/steamuser/Documents/`): exe version, the XInput DLL in use, menu/race
+switches, hook installation, controls reset.
+
+## UI changes in `data/resident.ark`
+
+The game's UI consists of Scaleform movies (`.gfx`, SWF with a `GFX` signature) inside
+`resident.ark`. Two movies are changed.
+
+### `UI/CommonUI/Prompt_Bar.gfx` (entry `266e5f18`)
+
+The button hint bar at the bottom of the menus. Each button's icon (`buttonA_mc` …
+`buttonSTART_mc`) is a clip with frames `Xenon_*`, `PS3_*` and `PC_KeyBlank` / `PC_GenKey` /
+`PC_GenKeyLong`. The PC version switches the icons to the keyboard frames and writes the key name
+into them.
+
+`tools/padicons.py` gives every button its own icon clip that keeps all frame labels but shows
+that button's Xbox glyph on every frame. Whatever frame the game selects, the gamepad button is
+shown, with no delay or flicker. The glyph sits in a nested clip `glyph_mc` so that
+`ui/padicon_frame1.as` can correct its proportions (see below).
+
+### `UI/Frontend/Flash/FE_pressStart_Overlay.gfx` (entry `51bf9dda`)
+
+The "PRESS ENTER TO START" title screen. The text is the localization key `TEXT_PRESS_START`,
+translated only after the first frame. `tools/pressstart.py` adds a clip with the A button (the
+same shape and atlas as in `Prompt_Bar`) and names the text field `press_txt`. The script
+`ui/pressstart_text.as` waits for the translation, replaces the word `ENTER` with spaces as wide
+as the icon and puts the icon there. Only `ENTER` is searched for: if a translation does not
+contain it, the text is left alone.
+
+### Engine quirks
+
+- The game only draws images from its texture packs (`*.textures`, `SXET` signature), through its
+  own `cGfxTextureManager::cImageCreator`. Bitmaps embedded in a movie and `BitmapData` are not
+  drawn, and neither are references to images missing from the packs (many are left over from the
+  console versions). So the icons are shapes filled from the `circle_buttons` atlas of the
+  CommonUI pack, which is always loaded.
+- `setImageSubstitutions` does not apply to text that is already shown.
+- `getExactCharBoundaries` returns the inked part of a glyph (empty for a space) and ignores line
+  alignment; the icon position is computed from the neighbouring characters plus the centering
+  offset.
+- The UI is drawn with `exactFit`: the 1280×720 stage is stretched to the whole screen. On
+  non-16:9 screens (Steam Deck is 16:10) the round icons get squashed; the scripts widen them by
+  `(screen height / 720) / (screen width / 1280)` using
+  `System.capabilities.screenResolutionX/Y`.
+
+## Installer (`installer/ssfix_install.c`)
+
+1. Checks the `SplitSecond.exe` version from its PE header (at `0xD40` in this build).
+2. For each change (`patch/*.ssdf`) finds the entry in `data/resident.ark` by name hash, unpacks
+   it and checks its size and CRC32 against the ones the diff was made for. If the archive was
+   already modified or the game version differs, it refuses and changes nothing.
+3. Saves the original 20-byte table records and the archive size to `data/resident.ark.ssfix`.
+4. Applies the diffs, appends the results to the end of the archive (aligned to `0x800`) and
+   points the table records at them (`flag = 0`, uncompressed). The rest of the archive is
+   untouched.
+5. Writes `xinput1_3.dll` and the controls reset marker. A foreign DLL with the same name is kept
+   as `.bak`; its own DLL (any version) is recognised by the `SSFIX-XINPUT-PROXY` string inside.
+6. Copies itself to `ssfix/` and puts an uninstall script next to the exe.
+
+Running it again first rolls back the previous installation, so the archive does not grow.
+Uninstall restores the table records, truncates the archive to its original size (it then matches
+the original byte for byte) and removes the DLL (restoring a `.bak`), the marker, the script and
+`ssfix/`.

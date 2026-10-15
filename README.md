@@ -1,237 +1,103 @@
-# splitsecond-xinput-fix
+# Split/Second gamepad fix
 
-Фикс управления с геймпада для PC-версии **Split/Second** (Disney / Black Rock, 2010).
-Проверялся на Steam Deck (Proton) с встроенным геймпадом.
+**English** | [Русский](README.ru.md)
 
-В оригинальной PC-версии:
+![Title screen: "press (A) to start" instead of "press ENTER"](docs/images/title-screen.jpg)
 
-- геймпад работает только в гонке, меню управляются только с клавиатуры;
-- подсказки в меню и на заставке нарисованы клавишами («НАЖМИТЕ ENTER…», клавиши в нижней строке);
-- обучающие подсказки в гонке называют клавиши клавиатуры («Вверх», «Правый Ctrl») или
-  сырые оси джойстика («Ось Z Отр», «Кнопка 1») — в зависимости от того, какое устройство
-  игра считает активным.
+Play the PC version of **Split/Second** (2010) with a gamepad only — on Windows or on Steam Deck.
 
-Фикс делает так, чтобы в игру можно было играть только геймпадом, а все подсказки показывали
-кнопки Xbox, как в консольной версии. Аналоговое управление в гонке (стики, курки) не трогается.
+The original PC release only uses the gamepad while driving: every menu needs the keyboard, and
+all hints show keyboard keys or raw axis names ("Press ENTER to start", "press Axis Z Neg to
+accelerate"). With this fix:
 
-## Что входит
+- **all menus work with the gamepad** — main menu, pause, results, options;
+- **hints show Xbox buttons** instead of keys: the button bar at the bottom of the menus, the
+  title screen and the tutorial hints during races;
+- **driving is unchanged** — sticks and triggers stay analog;
+- the controls are set once to a ready-to-play gamepad layout, so nothing has to be bound by hand.
 
-### `xinput1_3.dll` — прокси XInput (`src/xinput_fix.c`)
+<p>
+  <img src="docs/images/menu-prompts.jpg" width="49%" alt="Car selection with Y / X / B / A in the button bar">
+  <img src="docs/images/race-hint.jpg" width="49%" alt="Race hint with LT and left stick icons">
+</p>
 
-Игра импортирует из `xinput1_3.dll` только `XInputSetState` (вибрация), сам геймпад она читает
-через DirectInput. Прокси кладётся рядом с `SplitSecond.exe`, пересылает все вызовы в системный
-XInput и дополнительно:
+Tested on Steam Deck with the built-in controller. Any XInput gamepad (Xbox 360 / One / Series or
+compatible) should work the same way on Windows.
 
-**Навигация по меню.** Поток опрашивает геймпад 100 раз в секунду. Когда игра в меню
-(главное меню, пауза, экран результатов), нажатия превращаются в клавиши:
+## Requirements
 
-| Геймпад | В меню | В гонке |
-|---|---|---|
-| D-pad / левый стик | стрелки (с автоповтором) | — |
-| A / B | Enter / Esc | — |
-| X / Y | Space / Tab | — |
-| Start | Esc | Esc (пауза) |
+- The PC version of Split/Second whose `SplitSecond.exe` has build timestamp `4BE3EA74` (the
+  installer checks this and refuses other versions).
+- The original, unmodified `data/resident.ark`.
 
-Меню от гонки отличается по двум глобальным переменным игры, найденным сравнением снимков
-памяти: `[0xD4456C] == 0` — не в гонке, `[0xD8C104] != 0` — пауза/результаты.
+## Installation
 
-**Иконки в подсказках гонки.** Тексты вроде `ДЛЯ УСКОРЕНИЯ НАЖМИТЕ *ACTION_THROTTLE*` разворачивает
-функция `0x562350` (`cdecl (const char *action, String *out)`): она подставляет имя клавиши или оси
-для «активного» устройства. Прокси ставит на неё хук: для действий, назначенных на геймпад, он
-берёт привязку из профиля джойстика и возвращает метку `*BTN_RT*`, `*BTN_LT*`, `*BTN_LS*`,
-`*BTN_A*`, `*BTN_B*`, `*BTN_L3*` — HUD-ролик сам рисует вместо неё картинку кнопки. Для кнопок, у
-которых в HUD нет картинки (X, Y, LB, RB, правый стик), подставляется короткая подпись.
-Код игры зашифрован SecuROM и расшифровывается при запуске, поэтому хук ставится, как только
-байты функции совпадут с ожидаемыми.
+Download the latest `splitsecond-xinput-fix-*.zip` from
+[Releases](../../releases) and unpack it. Everything the fix needs is built into the installers.
 
-Все адреса — для `SplitSecond.exe` с `TimeDateStamp 0x4BE3EA74` и `SizeOfImage 0x1A64000`.
-С любым другим exe прокси ничего не меняет и только пересылает вызовы XInput.
+### Windows
 
-Лог: `%USERPROFILE%\Documents\ss_xinput_fix.log` (на Steam Deck — внутри префикса Proton,
-`.../pfx/drive_c/users/steamuser/Documents/`).
+1. Copy `ssfix-install.exe` into the game folder (next to `SplitSecond.exe`) and run it.
+   You can also run it from anywhere with the game folder as an argument:
+   `ssfix-install.exe "C:\Games\Split Second"`.
+2. Start the game.
 
-### Правки интерфейса в `data/resident.ark`
+No DirectX installation is needed for the fix itself.
 
-Интерфейс игры — ролики Scaleform (`.gfx`, это SWF с другой сигнатурой) внутри архива
-`resident.ark`. Правятся два ролика:
+### Steam Deck / Linux (Proton)
 
-- **`UI/CommonUI/Prompt_Bar.gfx`** (запись `266e5f18`) — нижняя строка подсказок. В PC-версии иконка
-  каждой кнопки переключается на кадр «клавиша с подписью» (`PC_KeyBlank`, `PC_GenKey`,
-  `PC_GenKeyLong`). Кадры с иконками Xbox (`Xenon_A` и т. д.) в ролике остались. `tools/padicons.py`
-  даёт каждой кнопке свой клип иконки, где на любом кадре показана её кнопка Xbox, — какой бы
-  кадр ни выбрала игра, видна кнопка геймпада.
-- **`UI/Frontend/Flash/FE_pressStart_Overlay.gfx`** (запись `51bf9dda`) — заставка
-  «НАЖМИТЕ ENTER, ЧТОБЫ НАЧАТЬ». `tools/pressstart.py` добавляет в ролик клип с кнопкой A, а скрипт
-  `ui/pressstart_text.as` заменяет в переведённом тексте слово `ENTER` пробелами и ставит на их
-  место иконку. От языка не зависит: ищется только `ENTER`, если его нет — текст остаётся как есть.
-
-Особенности движка, которые пришлось учитывать:
-
-- игра рисует только картинки из своих наборов текстур (`*.textures`, сигнатура `SXET`);
-  встроенные в ролик bitmap'ы и `BitmapData` не отображаются, поэтому иконки берутся из атласа
-  `circle_buttons` набора CommonUI (он загружен всегда);
-- `setImageSubstitutions` к уже показанному тексту не применяется, а
-  `getExactCharBoundaries` не учитывает выравнивание строки и даёт пустые границы для пробелов;
-- интерфейс рисуется в режиме `exactFit` (сцена 1280×720 растягивается на экран), поэтому на
-  экранах не 16:9 (Steam Deck — 16:10) круглые иконки сплющиваются; `ui/padicon_frame1.as` и
-  скрипт заставки компенсируют это по реальному разрешению.
-
-### Сброс управления
-
-Подсказки и навигация рассчитаны на раскладку, в которой геймпад назначен как Joy 0 (RT — газ,
-LT — тормоз, левый стик — руль, A/B — PowerPlay, Y — камера, правый стик — обзор), а клавиатура
-стоит на стрелках. По умолчанию в игре геймпад не назначен, поэтому установщик кладёт рядом с
-exe метку `ssfix_reset_controls`. Пока она есть, прокси выставляет эту раскладку в профилях
-управления в памяти игры. Сохранение игры зашифровано, поэтому записывает его сама игра: как
-только файл `*.sav` обновится после сброса, метка удаляется, и дальнейшие изменения в
-настройках управления сохраняются как обычно.
-
-## Установка
-
-Готовый архив — в релизах. В нём `ssfix-install.exe` (Windows), `ssfix-install` (Linux /
-Steam Deck), `xinput1_3.dll` и `INSTALL.txt`. DLL и правки архива уже встроены в оба
-установщика, отдельно копировать ничего не нужно.
-
-Нужен `SplitSecond.exe` с меткой сборки `4BE3EA74` и оригинальный `data/resident.ark`.
-
-**Windows**
-
-1. Положить `ssfix-install.exe` рядом с `SplitSecond.exe` и запустить (или запустить откуда
-   угодно с папкой игры в аргументе: `ssfix-install.exe "C:\Games\Split Second"`).
-2. Запустить игру — управление один раз сбросится на раскладку фикса.
-
-Отдельно ставить DirectX не обязательно: если в системе нет `xinput1_3.dll` из DirectX June
-2010, прокси использует `xinput1_4.dll` / `xinput9_1_0.dll`.
-
-**Steam Deck / Linux (Proton)**
-
-1. В режиме рабочего стола, в Konsole:
+1. In Desktop Mode, copy `ssfix-install` into the game folder (next to `SplitSecond.exe`).
+2. Open a terminal in that folder (in Dolphin: right-click an empty spot → **Open Terminal Here**)
+   and run:
+   ```
+   chmod +x ssfix-install
+   ./ssfix-install
+   ```
+   Or keep `ssfix-install` anywhere and pass the game folder — replace the path below with the
+   folder where *your* copy of the game is installed:
    ```
    chmod +x ssfix-install
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
-2. В Steam: свойства игры → «Параметры запуска»:
+3. In Steam, open the game's **Properties → Launch Options** and add:
    ```
    WINEDLLOVERRIDES="xinput1_3=n,b" %command%
    ```
-   Без этого Proton использует встроенный `xinput1_3` и DLL из папки игры не загружается.
-   Вместо параметра запуска можно прописать то же в реестр префикса
-   (`[Software\\Wine\\AppDefaults\\SplitSecond.exe\\DllOverrides]`, `"xinput1_3"="native,builtin"`).
-3. В Steam Input — обычная раскладка геймпада, без клавиш.
+   Without it Proton ignores the fix.
+4. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
+5. Start the game.
 
-**Удаление**: установщик кладёт в папку игры скрипт удаления — `Uninstall gamepad fix.bat`
-(Windows) или `uninstall-gamepad-fix.sh` (Linux), а свою копию — в `ssfix/`. Достаточно запустить
-скрипт; то же самое — `ssfix-install --uninstall [папка игры]`. Архив восстанавливается байт в
-байт, скрипт и `ssfix/` удаляются.
+## Controls
 
-### Что делает установщик (`installer/ssfix_install.c`)
+| | In menus | In races |
+|---|---|---|
+| D-pad / left stick | navigate | left stick: steer |
+| A | confirm | PowerPlay level 1 |
+| B | back | PowerPlay level 2 |
+| X / Y | extra actions shown in the button bar | Y: camera |
+| RT / LT | — | throttle / brake |
+| Right stick | — | look around |
+| Start | back | pause |
 
-1. Проверяет версию `SplitSecond.exe` по заголовку PE.
-2. Для каждой правки (`patch/*.ssdf`) находит запись в `data/resident.ark` по хэшу имени,
-   распаковывает её и сверяет размер и CRC32 с теми, от которых сделан дифф. Если архив уже
-   изменён или это другая версия игры — отказывается и ничего не меняет.
-3. Сохраняет исходные 20-байтные записи таблицы и размер архива в `data/resident.ark.ssfix`.
-4. Применяет диффы, дописывает результат в конец архива (с выравниванием 0x800) и
-   перенаправляет на него записи таблицы. Остальной архив не трогается.
-5. Записывает `xinput1_3.dll` (чужую DLL с тем же именем сохраняет как `.bak`) и метку сброса
-   управления.
-6. Копирует себя в `ssfix/` и создаёт рядом с exe скрипт удаления.
+On the first start after installation the controls are set to this layout. You can change them
+in the game's options afterwards; your changes are kept.
 
-Повторный запуск сначала откатывает предыдущую установку, так что архив не растёт.
-`--uninstall` возвращает записи таблицы, обрезает архив до исходного размера и удаляет DLL.
+## Uninstall
 
-## Сборка
+Run **`Uninstall gamepad fix.bat`** (Windows) or **`uninstall-gamepad-fix.sh`** (Linux / Steam
+Deck) in the game folder — the installer puts it there. The game files are restored exactly as
+they were. Then remove the launch option on Steam Deck.
 
-Нужны `make`, `i686-w64-mingw32-gcc`, компилятор C для Linux (статическая сборка: `musl-gcc`
-или `zig cc -target x86_64-linux-musl`), Python 3 и `zip`.
+## Troubleshooting
 
-```
-make dll                     # build/xinput1_3.dll
-make diag                    # build/diag/xinput1_3.dll — исследовательская сборка
-make all CC_LINUX=musl-gcc   # DLL + установщики build/win/ssfix-install.exe, build/linux/ssfix-install
-make dist CC_LINUX=musl-gcc  # dist/splitsecond-xinput-fix-<версия>.zip
-```
+- **The installer says the archive differs from the original.** `data/resident.ark` was already
+  modified by another mod, or it is a different game version. Restore the original file first.
+- **On Steam Deck nothing changes in the menus.** Check the launch option above.
+- The fix writes a log to `Documents\ss_xinput_fix.log` (on Proton: inside the game's prefix,
+  `.../pfx/drive_c/users/steamuser/Documents/`).
 
-На macOS: `brew install mingw-w64 zig`, затем `make dist CC_LINUX="zig cc -target x86_64-linux-musl"`.
-Версия берётся из `git describe`.
+## For developers
 
-Правки интерфейса лежат в репозитории как бинарные диффы `patch/*.ssdf` (≈5 КБ) относительно
-оригинальных записей архива — ресурсов игры в репозитории нет, и для сборки патча игра не
-нужна. Формат SSDF описан в `tools/mkdiff.py`: заголовок с хэшем записи, размерами и CRC32
-исходника и результата, затем операции «скопировать из оригинала» и «вставить байты».
-
-### Пересборка диффов
-
-Если меняются `tools/padicons.py`, `tools/pressstart.py`, `tools/swf.py` или `ui/*.as`, диффы
-пересобираются из оригинального архива игры:
-
-```
-tools/make_diffs.sh "<игра>/data/resident.ark" path/to/ffdec.jar
-```
-
-Нужны Python 3 (без дополнительных модулей) и Java для
-[JPEXS FFDec](https://github.com/jindrapetrik/jpexs-decompiler), которым компилируется
-ActionScript. Скрипт извлекает два ролика, собирает изменённые версии в `build/ui/` и пишет
-`patch/prompt_bar.ssdf` и `patch/press_start.ssdf`. Результат детерминирован: на одном и том же
-архиве получаются те же байты.
-
-## CI
-
-`.github/workflows/build.yml` на каждый push и PR собирает DLL и оба установщика на Ubuntu
-(`gcc-mingw-w64-i686`, `musl-gcc`) и выкладывает zip как артефакт. На тег `v*` тот же zip
-прикрепляется к GitHub-релизу, текст релиза берётся из `INSTALL.txt`:
-
-```
-git tag v1.0.0 && git push origin v1.0.0
-```
-
-## Структура
-
-```
-src/xinput_fix.c          исходник прокси (с -DDIAG — исследовательская сборка)
-src/xinput1_3.def         экспорты с ординалами как у оригинального xinput1_3
-installer/ssfix_install.c установщик (Windows и Linux)
-patch/*.ssdf              диффы роликов интерфейса
-ui/*.as                   ActionScript 2, вставляемый в ролики
-tools/                    инструменты для разбора и сборки ресурсов игры
-INSTALL.txt               инструкция для архива релиза
-Makefile                  сборка
-```
-
-## Инструменты
-
-Нужны Python 3 (с `numpy`, `Pillow`, `capstone` для исследовательских скриптов),
-`i686-w64-mingw32-gcc` для DLL, Java и [JPEXS FFDec](https://github.com/jindrapetrik/jpexs-decompiler)
-для компиляции ActionScript.
-
-| Файл | Назначение |
-|---|---|
-| `tools/ark.py` | чтение `.ark`: таблица записей (флаг, смещение, размеры, хэш имени), распаковка LZSS |
-| `tools/arkdump.c` | быстрая распаковка всего архива в `<hash>.bin` (`cc -O2 -o arkdump tools/arkdump.c`) |
-| `tools/ark_patch.py` | ручная замена одной записи архива (для экспериментов; установщик делает то же с откатом) |
-| `tools/mkdiff.py` | генерация SSDF-диффа между оригинальной и изменённой записью (с самопроверкой) |
-| `tools/make_diffs.sh` | полная пересборка `patch/*.ssdf` из оригинального архива |
-| `tools/embed.py` | упаковка DLL и диффов в `payload.h` для установщика |
-| `tools/swf.py` | минимальный чтение/запись тегов SWF/GFX, генерация простых фигур |
-| `tools/sxet.py` | распаковка наборов текстур `SXET` в PNG (имена — из соседнего списка имён) |
-| `tools/padicons.py` | сборка `Prompt_Bar.gfx` с иконками Xbox |
-| `tools/pressstart.py` | подготовка `FE_pressStart_Overlay.gfx` (клип с кнопкой A, имя текстового поля) |
-| `tools/memscan.py` | разбор снимков памяти из диагностической сборки (`ss_mem.bin`) |
-| `tools/ssdis.py` | помощники для дизассемблирования дампа расшифрованного exe (`ss_dump.bin`) |
-
-### Формат `.ark`
-
-Заголовок из 6 `u32` (версия `0x10000`, размер таблицы, число записей, …), с `0x18` — записи по
-20 байт: `flag, offset, csize, usize, hash`. `flag = 1` — данные сжаты: `u32` исходный размер и
-поток LZSS (кольцевой буфер 4 КБ, заполнен нулями, начальная позиция `0xFEE`, ссылка — 12 бит
-смещения и 4 бита длины + 3). `flag = 0` — данные как есть. Имена файлов хранятся только как хэш.
-
-### Исследовательская сборка (`make diag`)
-
-Прокси с `-DDIAG` дополнительно пишет в `Documents`:
-
-- `ss_mem.bin` — снимки секций `.data`/`Sdata` exe каждые 0,5 с (разностные), для поиска флагов
-  состояния через `tools/memscan.py`;
-- `ss_dump.bin` — образ exe из памяти при первом входе в гонку (код уже расшифрован SecuROM),
-  для дизассемблирования через `tools/ssdis.py`;
-- в лог — нажатия клавиш, активность геймпада и привязки управления из профилей игры.
+How the fix works, the game's file formats, the tools and the build are described in
+[`docs/`](docs): [implementation](docs/implementation.md),
+[tools and formats](docs/tooling.md), [building and CI](docs/building.md).

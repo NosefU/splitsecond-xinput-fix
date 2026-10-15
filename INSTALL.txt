@@ -23,14 +23,20 @@ Windows
      рассчитан фикс.
 
 Steam Deck / Linux (Proton)
-  1. Скопируйте ssfix-install на Deck и запустите в Konsole (режим рабочего стола):
+  1. В режиме рабочего стола скопируйте ssfix-install в папку игры (рядом с
+     SplitSecond.exe).
+  2. Откройте терминал в этой папке (в Dolphin: правой кнопкой по пустому месту ->
+     "Открыть терминал") и выполните:
          chmod +x ssfix-install
+         ./ssfix-install
+     Или оставьте ssfix-install где угодно и укажите папку игры (путь ниже - только
+     пример, замените его на папку, куда установлена ваша игра):
          ./ssfix-install "/home/deck/Games/Split Second"
-  2. В Steam: свойства игры -> Параметры запуска, добавьте:
+  3. В Steam: свойства игры -> Параметры запуска, добавьте:
          WINEDLLOVERRIDES="xinput1_3=n,b" %command%
      (без этого Proton не загрузит DLL из папки игры)
-  3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
-  4. Запустите игру. Управление один раз сбросится на раскладку фикса.
+  4. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
+  5. Запустите игру. Управление один раз сбросится на раскладку фикса.
 
 Геймпад
   В меню:   D-pad / левый стик - выбор, A - подтвердить, B - назад,
@@ -61,7 +67,11 @@ installer checks it). Needs the original, unmodified data/resident.ark.
 Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
 game folder as an argument), then start the game.
 
-Steam Deck / Linux: run ./ssfix-install "<game folder>" from a terminal, add
+Steam Deck / Linux: copy ssfix-install into the game folder, open a terminal
+there (Dolphin: right-click -> Open Terminal Here) and run
+    chmod +x ssfix-install && ./ssfix-install
+(or run it from anywhere with your game folder as the argument:
+./ssfix-install "/path/to/your/Split Second"). Then add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%
 to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
 

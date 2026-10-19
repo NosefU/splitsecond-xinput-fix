@@ -96,6 +96,19 @@ Run **`Uninstall gamepad fix.bat`** (Windows) or **`uninstall-gamepad-fix.sh`** 
 Deck) in the game folder — the installer puts it there. The game files are restored exactly as
 they were. Then remove the launch option on Steam Deck.
 
+## Steam updates and language changes
+
+In the Steam version, `SplitSecond.exe` and `data/resident.ark` come with the language pack.
+Changing the game language in Steam, a game update or **Verify integrity of game files** replace
+them and remove the fix from the archive. Before changing the language, uninstall the fix (the
+files are then exactly the original ones and Steam can update them safely); afterwards run the
+installer again. If Steam has already replaced the files, just run the installer again: it notices
+that and patches the new archive.
+
+The fix is made for the English Steam version and the boxed release. For other Steam languages the
+installer may report an unsupported `SplitSecond.exe`; then the fix cannot be used with that
+language yet.
+
 ## Troubleshooting
 
 - **The installer says the archive differs from the original.** `data/resident.ark` was already

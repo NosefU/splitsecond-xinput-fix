@@ -276,6 +276,25 @@ static FILE *open_archive(uint32_t *count)
     return f;
 }
 
+/* The archive is still the one the sidecar was made for: it is longer than the
+ * saved size, and each patched record keeps its entry hash and points at data
+ * appended past the saved size. */
+static int archive_is_patched(FILE *f, uint32_t count, const struct sidecar *sc)
+{
+    int64_t size;
+    if (seek64(f, 0, SEEK_END) || (size = tell64(f)) <= (int64_t)sc->ark_size) return 0;
+    for (uint32_t i = 0; i < sc->count; i++)
+    {
+        uint8_t rec[ARK_RECORD];
+        if (sc->index[i] >= count) return 0;
+        read_at(f, ARK_TABLE + (int64_t)sc->index[i] * ARK_RECORD, rec, ARK_RECORD, "archive table");
+        if (rd32(rec + 16) != rd32(sc->record[i] + 16) || rd32(rec) != 0
+            || rd32(rec + 4) < sc->ark_size || rd32(rec + 4) + (int64_t)rd32(rec + 8) > size)
+            return 0;
+    }
+    return 1;
+}
+
 static int restore_archive(void)
 {
     struct sidecar sc;
@@ -284,11 +303,18 @@ static int restore_archive(void)
     char path[4200];
     if (!load_sidecar(&sc)) return 0;
     f = open_archive(&count);
-    for (uint32_t i = 0; i < sc.count; i++)
+    if (!archive_is_patched(f, count, &sc))
     {
-        if (sc.index[i] >= count) fail("data/resident.ark.ssfix does not match the archive");
-        write_at(f, ARK_TABLE + (int64_t)sc.index[i] * ARK_RECORD, sc.record[i], ARK_RECORD, "archive table");
+        /* The archive was replaced since (a Steam update, a language change,
+         * "verify integrity"): the saved records belong to another file. */
+        fclose(f);
+        path_join(path, sizeof(path), "data/resident.ark.ssfix");
+        remove(path);
+        printf("  data/resident.ark was replaced since the fix was installed; nothing to restore\n");
+        return 0;
     }
+    for (uint32_t i = 0; i < sc.count; i++)
+        write_at(f, ARK_TABLE + (int64_t)sc.index[i] * ARK_RECORD, sc.record[i], ARK_RECORD, "archive table");
     fflush(f);
     if (truncate_file(f, (int64_t)sc.ark_size)) fail("cannot truncate data/resident.ark");
     fclose(f);

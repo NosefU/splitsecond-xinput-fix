@@ -7,6 +7,7 @@
 - **Steam Deck / Linux: no launch option needed any more.** The installer enables the fix in the game's Proton prefix itself (Steam version or non-Steam shortcut) and removes it on uninstall.
 - **Title screen in French, Italian and Spanish:** the A button now replaces the local name of the Enter key there too (ENTRÉE, INVIO, INTRO).
 - Updating over a previous version no longer resets the controls.
+- The installer no longer touches `data/resident.ark` if Steam replaced it after installation (update, language change, file verification); it just patches the new archive.
 
 **Downloads:** `…-windows.zip` for Windows, `…-linux.tar.gz` for Steam Deck / Linux. To update, run the new installer over the old one. Installation steps are in `INSTALL.txt` inside the archive and in the [README](README.md).
 
@@ -21,5 +22,6 @@
 - **Steam Deck / Linux: параметр запуска больше не нужен.** Установщик сам включает фикс в префиксе Proton игры (Steam-версии или ярлыка не из Steam) и убирает при удалении.
 - **Заставка на французском, итальянском и испанском:** кнопка A теперь подставляется и вместо местного названия клавиши Enter (ENTRÉE, INVIO, INTRO).
 - Обновление поверх предыдущей версии больше не сбрасывает управление.
+- Установщик больше не трогает `data/resident.ark`, если Steam заменил его после установки (обновление, смена языка, проверка файлов), а просто патчит новый архив.
 
 **Скачать:** `…-windows.zip` для Windows, `…-linux.tar.gz` для Steam Deck / Linux. Чтобы обновиться, запустите новый установщик поверх старого. Порядок установки — в `INSTALL.txt` внутри архива и в [README](README.ru.md).

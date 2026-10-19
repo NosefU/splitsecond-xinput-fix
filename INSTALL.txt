@@ -55,6 +55,10 @@ Steam Deck / Linux (Proton)
 (прежняя xinput1_3.dll возвращается из xinput1_3.dll.bak), скрипт удаления и
 папка ssfix\ тоже удаляются.
 
+Steam: смена языка игры, обновление или проверка целостности файлов заменяют
+SplitSecond.exe и data/resident.ark. Перед сменой языка удалите фикс, после -
+установите снова. Если файлы уже заменены, просто запустите установщик ещё раз.
+
 Лог: Documents\ss_xinput_fix.log (в Proton - внутри префикса игры,
 .../pfx/drive_c/users/steamuser/Documents/)
 
@@ -79,6 +83,10 @@ there (Dolphin: right-click -> Open Terminal Here) and run
 to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
 
 On the first start the controls are reset once to the layout the fix expects.
+Steam: changing the language, an update or verifying the game files replace
+SplitSecond.exe and data/resident.ark. Uninstall the fix before changing the
+language and install it again afterwards; if the files are already replaced,
+just run the installer again.
 To uninstall, run "Uninstall gamepad fix.bat" (Windows) or
 uninstall-gamepad-fix.sh (Linux) in the game folder; the archive is restored
 byte for byte.

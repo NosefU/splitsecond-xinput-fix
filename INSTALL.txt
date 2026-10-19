@@ -16,12 +16,16 @@ SplitSecond.exe и откажется работать с другой верс�
 Всё нужное (DLL фикса и правки файлов игры) встроено в установщик.
 
 Windows
-  1. Скопируйте ssfix-install.exe в папку игры (рядом с SplitSecond.exe) и запустите.
+  1. Распакуйте архив куда угодно и запустите ssfix-install.exe.
      Windows попросит права администратора. Если SmartScreen скажет, что
      приложение не распознано: "Подробнее" -> "Выполнить в любом случае".
-     Или запустите откуда угодно, передав папку игры:
+     Установщик найдёт игру (Steam-версию и установленную с диска), покажет
+     список копий с состоянием фикса и спросит, что сделать:
+     i - установить, r - переустановить / обновить, u - удалить.
+     Если вашей копии нет в списке, скопируйте ssfix-install.exe в папку игры
+     (рядом с SplitSecond.exe) и запустите там - тогда он сразу ставит фикс в
+     эту папку. Или передайте папку игры:
          ssfix-install.exe "C:\Games\Split Second"
-     Steam-версия: C:\Program Files (x86)\Steam\steamapps\common\SplitSecond
   2. Запустите игру. Управление один раз сбросится на раскладку, под которую
      рассчитан фикс.
 
@@ -77,9 +81,13 @@ the menu hints, on the title screen and in race hints.
 Works with the boxed and the Steam version of the game (the installer checks
 SplitSecond.exe). Needs the original, unmodified data/resident.ark.
 
-Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
-game folder as an argument), allow administrator rights, then start the game.
-The Steam version is in C:\Program Files (x86)\Steam\steamapps\common\SplitSecond.
+Windows: unpack anywhere, run ssfix-install.exe and allow administrator rights.
+It finds the game (the Steam version and the one installed from disc), lists
+the copies with the state of the fix and asks what to do: i - install,
+r - reinstall / update, u - uninstall. If your copy is not listed, put
+ssfix-install.exe next to SplitSecond.exe and run it there (it then installs
+into that folder straight away), or pass the game folder as an argument.
+Then start the game.
 
 Steam Deck / Linux: unpack anywhere, open a terminal there (Dolphin:
 right-click -> Open Terminal Here) and run

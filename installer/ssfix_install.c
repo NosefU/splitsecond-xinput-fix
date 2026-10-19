@@ -18,7 +18,9 @@
  *     script next to the exe ("Uninstall gamepad fix.bat" on Windows,
  *     uninstall-gamepad-fix.sh on Linux).
  * Uninstall reverses all of that. Without a folder argument the current
- * folder is used, or the installer's own folder if the game is not there. */
+ * folder is used, or the installer's own folder if the game is not there;
+ * if it is in neither, the copies of the game found on this computer are
+ * listed to choose from. */
 #define _DEFAULT_SOURCE  /* realpath, strncasecmp */
 #include <errno.h>
 #include <stdarg.h>
@@ -533,33 +535,48 @@ static void remove_uninstaller(void)
     remove_dir(dir);
 }
 
-#ifndef _WIN32
-/* ---- Proton: DLL override in the game's prefix ----
- * Proton only loads xinput1_3.dll from the game folder with a DLL override.
- * Instead of asking for a launch option, the installer adds
- *   [Software\\Wine\\AppDefaults\\SplitSecond.exe\\DllOverrides] "xinput1_3"="native,builtin"
- * to user.reg of the game's prefix: compatdata/<appid> of the Steam version
- * (appmanifest) or of a non-Steam shortcut to the game (shortcuts.vdf). The
- * prefixes changed are listed in ssfix/proton-prefixes.txt for uninstall. */
-#include <dirent.h>
+/* ---- Steam libraries ----
+ * The Steam folder (Linux: native and Flatpak; Windows: from the registry)
+ * and the library folders listed in its steamapps/libraryfolders.vdf. */
 #include <limits.h>
 #include <strings.h>
-#include <time.h>
+#define PATH_LEN 4096  /* PATH_MAX of Linux; MinGW's is only 260 */
+#ifdef _WIN32
+/* Full path of an existing file or folder. */
+static int real_path(const char *path, char *out)
+{
+    DWORD n = GetFullPathNameA(path, PATH_LEN, out, NULL);
+    return n > 0 && n < PATH_LEN && GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES;
+}
+static int same_path(const char *a, const char *b) { return !_stricmp(a, b); }
 
-#define REG_KEY   "[Software\\\\Wine\\\\AppDefaults\\\\SplitSecond.exe\\\\DllOverrides]"
-#define REG_VALUE "\"xinput1_3\"=\"native,builtin\""
-#define PREFIX_LIST "ssfix/proton-prefixes.txt"
+static int reg_string(HKEY root, const char *key, const char *name, char *out, DWORD size)
+{
+    HKEY h;
+    DWORD type, n = size - 1;
+    LONG r;
+    if (RegOpenKeyExA(root, key, 0, KEY_READ, &h)) return 0;
+    r = RegQueryValueExA(h, name, NULL, &type, (BYTE *)out, &n);
+    RegCloseKey(h);
+    if (r || type != REG_SZ) return 0;
+    out[n] = 0;
+    return 1;
+}
+#else
+static int real_path(const char *path, char *out) { return realpath(path, out) != NULL; }
+static int same_path(const char *a, const char *b) { return !strcmp(a, b); }
+#endif
 
-static char steam_libs[16][PATH_MAX];
+static char steam_libs[16][PATH_LEN];
 static int steam_lib_count;
 
 static void add_lib(const char *path)
 {
-    char real[PATH_MAX];
-    if (!realpath(path, real) || steam_lib_count == 16) return;
+    char real[PATH_LEN];
+    if (!real_path(path, real) || steam_lib_count == 16) return;
     for (int i = 0; i < steam_lib_count; i++)
-        if (!strcmp(steam_libs[i], real)) return;
-    snprintf(steam_libs[steam_lib_count++], PATH_MAX, "%s", real);
+        if (same_path(steam_libs[i], real)) return;
+    snprintf(steam_libs[steam_lib_count++], PATH_LEN, "%s", real);
 }
 
 static char *read_text(const char *path, long *len_out)
@@ -582,31 +599,63 @@ static char *read_text(const char *path, long *len_out)
     return buf;
 }
 
-/* Steam roots (native and Flatpak) and the library folders they list. */
+static void add_steam_root(const char *root)
+{
+    char path[PATH_LEN + 64], *text, *p;
+    add_lib(root);
+    snprintf(path, sizeof(path), "%s/steamapps/libraryfolders.vdf", root);
+    if (!(text = read_text(path, NULL))) return;
+    for (p = text; (p = strstr(p, "\"path\"")); )
+    {
+        char *a = strchr(p + 6, '"'), *s, *d;
+        if (!a) break;
+        /* VDF strings escape backslashes: "C:\\Games\\Steam" */
+        for (s = d = ++a; *s && *s != '"'; s++, d++)
+        {
+            if (*s == '\\' && s[1]) s++;
+            *d = *s;
+        }
+        if (!*s) break;
+        *d = 0;
+        add_lib(a);
+        p = s + 1;
+    }
+    free(text);
+}
+
 static void find_steam_libs(void)
 {
+    char root[PATH_LEN];
+    if (steam_lib_count) return;
+#ifdef _WIN32
+    if (reg_string(HKEY_LOCAL_MACHINE, "SOFTWARE\\Valve\\Steam", "InstallPath", root, sizeof(root))) add_steam_root(root);
+    if (reg_string(HKEY_CURRENT_USER, "Software\\Valve\\Steam", "SteamPath", root, sizeof(root))) add_steam_root(root);
+#else
     static const char *const roots[] = { ".local/share/Steam", ".steam/steam", ".var/app/com.valvesoftware.Steam/.local/share/Steam" };
     const char *home = getenv("HOME");
-    char path[PATH_MAX];
-    if (!home || steam_lib_count) return;
+    if (!home) return;
     for (size_t r = 0; r < sizeof(roots) / sizeof(*roots); r++)
     {
-        char *text, *p;
-        snprintf(path, sizeof(path), "%s/%s", home, roots[r]);
-        add_lib(path);
-        snprintf(path, sizeof(path), "%s/%s/steamapps/libraryfolders.vdf", home, roots[r]);
-        if (!(text = read_text(path, NULL))) continue;
-        for (p = text; (p = strstr(p, "\"path\"")); )
-        {
-            char *a = strchr(p + 6, '"'), *b = a ? strchr(a + 1, '"') : NULL;
-            if (!b) break;
-            *b = 0;
-            add_lib(a + 1);
-            p = b + 1;
-        }
-        free(text);
+        snprintf(root, sizeof(root), "%s/%s", home, roots[r]);
+        add_steam_root(root);
     }
+#endif
 }
+
+#ifndef _WIN32
+/* ---- Proton: DLL override in the game's prefix ----
+ * Proton only loads xinput1_3.dll from the game folder with a DLL override.
+ * Instead of asking for a launch option, the installer adds
+ *   [Software\\Wine\\AppDefaults\\SplitSecond.exe\\DllOverrides] "xinput1_3"="native,builtin"
+ * to user.reg of the game's prefix: compatdata/<appid> of the Steam version
+ * (appmanifest) or of a non-Steam shortcut to the game (shortcuts.vdf). The
+ * prefixes changed are listed in ssfix/proton-prefixes.txt for uninstall. */
+#include <dirent.h>
+#include <time.h>
+
+#define REG_KEY   "[Software\\\\Wine\\\\AppDefaults\\\\SplitSecond.exe\\\\DllOverrides]"
+#define REG_VALUE "\"xinput1_3\"=\"native,builtin\""
+#define PREFIX_LIST "ssfix/proton-prefixes.txt"
 
 static int user_reg_of(const char *appid, char *out, size_t size)
 {
@@ -623,7 +672,7 @@ static int steam_appid(const char *game, char *appid, size_t size)
 {
     for (int i = 0; i < steam_lib_count; i++)
     {
-        char common[PATH_MAX + 32], dir[PATH_MAX + 32];
+        char common[PATH_LEN + 32], dir[PATH_LEN + 32];
         size_t n = (size_t)snprintf(common, sizeof(common), "%s/steamapps/common/", steam_libs[i]);
         DIR *d;
         struct dirent *e;
@@ -632,7 +681,7 @@ static int steam_appid(const char *game, char *appid, size_t size)
         if (!(d = opendir(dir))) continue;
         while ((e = readdir(d)))
         {
-            char path[PATH_MAX * 2], want[PATH_MAX + 16], *text;
+            char path[PATH_LEN * 2], want[PATH_LEN + 16], *text;
             if (strncmp(e->d_name, "appmanifest_", 12) || !strstr(e->d_name, ".acf")) continue;
             snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
             snprintf(want, sizeof(want), "\"%s\"", game + n);
@@ -656,7 +705,7 @@ static int steam_appid(const char *game, char *appid, size_t size)
  * "shortcuts" of maps "0", "1", ... with fields such as appid (int32),
  * AppName, Exe and StartDir (strings). Field types: 0 map, 1 string,
  * 2 int32, 7 int64, 8 end of map. */
-struct shortcut { uint32_t appid; char name[256], exe[PATH_MAX], start_dir[PATH_MAX]; };
+struct shortcut { uint32_t appid; char name[256], exe[PATH_LEN], start_dir[PATH_LEN]; };
 
 /* Skips the rest of a map; returns the byte after its end marker, or NULL. */
 static const uint8_t *vdf_skip_map(const uint8_t *p, const uint8_t *end)
@@ -690,14 +739,14 @@ static int for_each_shortcut(int (*cb)(const struct shortcut *, void *), void *c
 {
     for (int i = 0; i < steam_lib_count; i++)
     {
-        char dir[PATH_MAX + 16];
+        char dir[PATH_LEN + 16];
         DIR *d;
         struct dirent *e;
         snprintf(dir, sizeof(dir), "%s/userdata", steam_libs[i]);
         if (!(d = opendir(dir))) continue;
         while ((e = readdir(d)))
         {
-            char path[PATH_MAX * 2];
+            char path[PATH_LEN * 2];
             uint8_t *data;
             long len;
             int stop = 0;
@@ -753,7 +802,7 @@ static int for_each_shortcut(int (*cb)(const struct shortcut *, void *), void *c
 /* Directory part of a path, resolved; FALSE if it does not exist. */
 static int real_dir_of(const char *file, char *out)
 {
-    char dir[PATH_MAX], *slash;
+    char dir[PATH_LEN], *slash;
     snprintf(dir, sizeof(dir), "%s", file);
     if (!(slash = strrchr(dir, '/'))) return 0;
     *slash = 0;
@@ -766,7 +815,7 @@ struct appid_search { const char *game; uint32_t appid; };
 static int match_shortcut(const struct shortcut *sc, void *ctx)
 {
     struct appid_search *s = ctx;
-    char real[PATH_MAX];
+    char real[PATH_LEN];
     if (!sc->appid) return 0;
     if ((sc->exe[0] && real_dir_of(sc->exe, real) && !strcmp(real, s->game))
         || (sc->start_dir[0] && realpath(sc->start_dir, real) && !strcmp(real, s->game)))
@@ -807,7 +856,7 @@ static int wine_running(void)
 
 static int write_text(const char *path, const char *text, size_t len)
 {
-    char tmp[PATH_MAX + 16];
+    char tmp[PATH_LEN + 16];
     struct stat st;
     FILE *f;
     snprintf(tmp, sizeof(tmp), "%s.ssfix-tmp", path);
@@ -906,7 +955,7 @@ static void reg_remove_override(const char *reg)
 
 static void proton_install(void)
 {
-    char game[PATH_MAX], appid[32], reg[PATH_MAX * 2], list[4200];
+    char game[PATH_LEN], appid[32], reg[PATH_LEN * 2], list[4200];
     const char *kind;
     FILE *f;
     if (!realpath(game_dir, game)) return;
@@ -1042,48 +1091,73 @@ static void run(int uninstall)
     }
 }
 
-#ifndef _WIN32
-/* ---- finding the game through Steam ----
- * Without a game folder the installer lists the copies Steam knows about:
- * the Steam version (appmanifest_297860.acf -> steamapps/common/<installdir>)
- * and non-Steam shortcuts whose Exe is a SplitSecond.exe, with the state of
- * the fix in each, and asks what to do. */
-#include <sys/stat.h>
-
+/* ---- finding the game ----
+ * Without a game folder the installer lists the copies it can find, with the
+ * state of the fix in each, and asks what to do:
+ *   - the Steam version (appmanifest_297860.acf -> steamapps/common/<installdir>);
+ *   - Linux: non-Steam shortcuts whose Exe is a SplitSecond.exe;
+ *   - Windows: the disc version's InstallPath and the uninstall entries of
+ *     installed programs whose folder has a SplitSecond.exe. */
 #define MAX_GAMES 16
-static struct game { char dir[PATH_MAX], source[320]; } games[MAX_GAMES];
+static struct game { char dir[PATH_LEN], source[320]; } games[MAX_GAMES];
 static int game_count;
 
 static void add_game(const char *dir, const char *source)
 {
-    char real[PATH_MAX], exe[PATH_MAX + 32];
-    if (game_count == MAX_GAMES || !realpath(dir, real)) return;
-    snprintf(exe, sizeof(exe), "%s/SplitSecond.exe", real);
-    if (access(exe, R_OK)) return;
+    char real[PATH_LEN], exe[PATH_LEN + 32];
+    size_t len;
+    FILE *f;
+    if (game_count == MAX_GAMES || !real_path(dir, real)) return;
+    for (len = strlen(real); len > 3 && (real[len - 1] == '/' || real[len - 1] == '\\'); ) real[--len] = 0;
+    snprintf(exe, sizeof(exe), "%s%cSplitSecond.exe", real, PATH_SEP);
+    if (!(f = fopen(exe, "rb"))) return;
+    fclose(f);
     for (int i = 0; i < game_count; i++)
-        if (!strcmp(games[i].dir, real)) return;
-    snprintf(games[game_count].dir, PATH_MAX, "%s", real);
+        if (same_path(games[i].dir, real)) return;
+    snprintf(games[game_count].dir, PATH_LEN, "%s", real);
     snprintf(games[game_count].source, sizeof(games[0].source), "%s", source);
     game_count++;
 }
 
+#ifdef _WIN32
+#define UNINSTALL_KEY "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+
+/* The installer is 32-bit, so HKLM\SOFTWARE is the 32-bit view (WOW6432Node),
+ * where the game and its installers write their keys. */
+static void find_installed(void)
+{
+    char dir[PATH_LEN], name[256], key[400];
+    HKEY h;
+    if (reg_string(HKEY_LOCAL_MACHINE, "SOFTWARE\\Disney Interactive Studios\\Split Second", "InstallPath", dir, sizeof(dir)))
+        add_game(dir, "installed");
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, UNINSTALL_KEY, 0, KEY_READ, &h)) return;
+    for (DWORD i = 0, n = sizeof(name); !RegEnumKeyExA(h, i, name, &n, NULL, NULL, NULL, NULL); i++, n = sizeof(name))
+    {
+        snprintf(key, sizeof(key), UNINSTALL_KEY "\\%s", name);
+        if (reg_string(HKEY_LOCAL_MACHINE, key, "InstallLocation", dir, sizeof(dir)) && dir[0])
+            add_game(dir, strncmp(name, "Steam App ", 10) ? "installed" : "Steam");
+    }
+    RegCloseKey(h);
+}
+#else
 static int collect_shortcut(const struct shortcut *sc, void *ctx)
 {
     const char *name = strrchr(sc->exe, '/');
-    char dir[PATH_MAX], source[300];
+    char dir[PATH_LEN], source[300];
     (void)ctx;
     if (!name || strcasecmp(name + 1, "SplitSecond.exe") || !real_dir_of(sc->exe, dir)) return 0;
     snprintf(source, sizeof(source), "Steam shortcut \"%.250s\"", sc->name);
     add_game(dir, source);
     return 0;
 }
+#endif
 
 static void find_games(void)
 {
     find_steam_libs();
     for (int i = 0; i < steam_lib_count; i++)
     {
-        char path[PATH_MAX + 64], dir[PATH_MAX * 2], *text, *p, *q;
+        char path[PATH_LEN + 64], dir[PATH_LEN * 2], *text, *p, *q;
         snprintf(path, sizeof(path), "%s/steamapps/appmanifest_297860.acf", steam_libs[i]);
         if (!(text = read_text(path, NULL))) continue;
         if ((p = strstr(text, "\"installdir\"")) && (p = strchr(p + 12, '"')) && (q = strchr(p + 1, '"')))
@@ -1094,7 +1168,11 @@ static void find_games(void)
         }
         free(text);
     }
+#ifdef _WIN32
+    find_installed();
+#else
     for_each_shortcut(collect_shortcut, NULL);
+#endif
 }
 
 enum { ST_MISSING, ST_UNSUPPORTED, ST_NOT_INSTALLED, ST_INSTALLED, ST_INSTALLED_OTHER, ST_BROKEN };
@@ -1168,14 +1246,18 @@ static int menu(void)
     find_games();
     if (!game_count)
     {
+#ifdef _WIN32
+        printf("\nSplit/Second was not found. Copy %s into the game folder and run it there.\n", SELF_NAME);
+#else
         printf("\nSplit/Second was not found through Steam. Run the installer with the game folder:\n"
                "  ./ssfix-install \"/path/to/Split Second\"\n");
+#endif
         return 1;
     }
     printf("\nFound Split/Second:\n");
     for (int i = 0; i < game_count; i++)
     {
-        snprintf(game_dir, sizeof(game_dir), "%s", games[i].dir);
+        memcpy(game_dir, games[i].dir, sizeof(game_dir));  /* same size */
         states[i] = fix_state(&stamps[i], &builds[i]);
         printf("  %d. %s  [%s]\n     %s\n", i + 1, games[i].dir, games[i].source, state_text(states[i], stamps[i], builds[i]));
     }
@@ -1192,7 +1274,7 @@ static int menu(void)
         if (!ask(prompt, answer, sizeof(answer)) || (choice = atoi(answer)) < 1 || choice > game_count) return 0;
     }
     int st = states[choice - 1];
-    snprintf(game_dir, sizeof(game_dir), "%s", games[choice - 1].dir);
+    memcpy(game_dir, games[choice - 1].dir, sizeof(game_dir));  /* same size */
     printf("\n%s\n%s\n", game_dir, state_text(st, stamps[choice - 1], builds[choice - 1]));
     if (st == ST_UNSUPPORTED || st == ST_MISSING) return 1;
     if (st == ST_NOT_INSTALLED)
@@ -1208,7 +1290,6 @@ static int menu(void)
     run(answer[0] == 'u');
     return 0;
 }
-#endif
 
 int main(int argc, char **argv)
 {
@@ -1222,16 +1303,19 @@ int main(int argc, char **argv)
         {
             printf("usage: %s [--uninstall] [game folder]\n"
                    "Without a folder: the current folder or the installer's own one if the game is there;\n"
-                   "otherwise (Linux) the copies of the game found through Steam are listed to choose from.\n", argv[0]);
+                   "otherwise the copies of the game found on this computer are listed to choose from.\n", argv[0]);
             return 0;
         }
         else dir = argv[i];
     }
     printf("Split/Second gamepad fix %s\n", PAYLOAD_VERSION);
     find_game_dir(dir, argv[0]);
-#ifndef _WIN32
-    if (!dir && !file_exists("SplitSecond.exe")) return menu();
-#endif
+    if (!dir && !file_exists("SplitSecond.exe"))
+    {
+        int r = menu();
+        pause_on_windows();
+        return r;
+    }
     run(uninstall);
     pause_on_windows();
     return 0;

@@ -41,14 +41,17 @@ Steam Deck / Linux. Each contains a single installer with everything the fix nee
 
 ### Windows
 
-1. Copy `ssfix-install.exe` into the game folder (next to `SplitSecond.exe`) and run it.
+1. Unpack the archive anywhere and run `ssfix-install.exe`.
    Windows asks for administrator rights: the game folder is usually under `Program Files`. If
    SmartScreen says the app is unrecognised, click **More info → Run anyway**.
-   You can also run it from anywhere with the game folder as an argument:
-   `ssfix-install.exe "C:\Games\Split Second"`.
-   The Steam version is in `C:\Program Files (x86)\Steam\steamapps\common\SplitSecond` (or in
-   another Steam library folder).
-2. Start the game.
+2. The installer finds the game — the Steam version and the one installed from disc — and lists
+   each copy with the state of the fix. Pick one (if there are several), then press `i` to
+   install, `r` to reinstall / update or `u` to uninstall.
+
+   If your copy is not listed, copy `ssfix-install.exe` into the game folder (next to
+   `SplitSecond.exe`) and run it there: then it installs into that folder without asking. Or pass
+   the folder as an argument: `ssfix-install.exe "C:\Games\Split Second"`.
+3. Start the game.
 
 No DirectX installation is needed for the fix itself.
 

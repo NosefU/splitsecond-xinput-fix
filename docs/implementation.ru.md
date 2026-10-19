@@ -187,8 +187,14 @@ LT — тормоз, левый стик — руль, A/B — PowerPlay, Y — 
    файлы в `ssfix/proton-prefixes.txt`.
 
 Если папка игры не указана и `SplitSecond.exe` нет ни в текущей папке, ни рядом с установщиком,
-Linux-установщик ищет игру через Steam: `appmanifest_297860.acf` во всех библиотеках (Steam-версия)
-и ярлыки игр не из Steam, у которых `Exe` — это `SplitSecond.exe`. Он выводит каждую копию со
+установщик ищет игру сам: `appmanifest_297860.acf` во всех библиотеках Steam (Steam-версия; на
+Windows папка Steam берётся из `HKLM\SOFTWARE\Valve\Steam\InstallPath` и
+`HKCU\Software\Valve\Steam\SteamPath`), на Linux — ярлыки игр не из Steam, у которых `Exe` — это
+`SplitSecond.exe`, на Windows — `InstallPath` коробочной версии в
+`HKLM\SOFTWARE\Disney Interactive Studios\Split Second` и `InstallLocation` всех записей списка
+установленных программ (`...\CurrentVersion\Uninstall`), в папке которых есть `SplitSecond.exe`, —
+так находятся и репаки, и копии из других установщиков. Установщик 32-битный, поэтому это ключи
+`WOW6432Node`. Он выводит каждую копию со
 сборкой и состоянием фикса — не установлен, установлен (эта версия: DLL байт в байт совпадает со
 встроенной, или другая версия), требует переустановки (DLL на месте, а архив не пропатчен,
 например после замены Steam'ом), не поддерживается — и спрашивает, что сделать.

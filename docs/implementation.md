@@ -193,8 +193,14 @@ translation contains none of them, the text is left alone.
    files in `ssfix/proton-prefixes.txt`.
 
 Without a game folder, and with no `SplitSecond.exe` in the current folder or next to the installer,
-the Linux installer looks for the game through Steam: `appmanifest_297860.acf` in every library
-(the Steam version) and non-Steam shortcuts whose `Exe` is a `SplitSecond.exe`. It lists each
+the installer looks for the game: `appmanifest_297860.acf` in every Steam library (the Steam
+version; on Windows the Steam folder comes from `HKLM\SOFTWARE\Valve\Steam\InstallPath` and
+`HKCU\Software\Valve\Steam\SteamPath`), on Linux non-Steam shortcuts whose `Exe` is a
+`SplitSecond.exe`, on Windows the disc version's `InstallPath` under
+`HKLM\SOFTWARE\Disney Interactive Studios\Split Second` and the `InstallLocation` of every
+uninstall entry (`...\CurrentVersion\Uninstall`) whose folder has a `SplitSecond.exe` — that
+also covers repacks and other installers. The installer is 32-bit, so these are the
+`WOW6432Node` keys. It lists each
 copy with the build and the state of the fix — not installed, installed (this version: the DLL is
 byte for byte the embedded one, or another version), needs reinstalling (the DLL is there but the
 archive is not patched, e.g. after Steam replaced it), unsupported — and asks what to do.

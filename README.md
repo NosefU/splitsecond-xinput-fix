@@ -50,7 +50,7 @@ No DirectX installation is needed for the fix itself.
 
 ### Steam Deck / Linux (Proton)
 
-1. In Desktop Mode, copy `ssfix-install` into the game folder (next to `SplitSecond.exe`).
+1. In Desktop Mode, unpack the archive anywhere, for example in `Downloads`.
 2. Open a terminal in that folder (in Dolphin: right-click an empty spot → **Open Terminal Here**)
    and run:
    ```
@@ -58,11 +58,25 @@ No DirectX installation is needed for the fix itself.
    ```
    (if it says "Permission denied", run `chmod +x ssfix-install` first)
 
-   Or keep `ssfix-install` anywhere and pass the game folder — replace the path below with the
-   folder where *your* copy of the game is installed:
+   The installer finds the game through Steam — the Steam version and non-Steam shortcuts to
+   `SplitSecond.exe` — and lists every copy with the state of the fix in it:
+   ```
+   Found Split/Second:
+     1. /home/deck/.local/share/Steam/steamapps/common/SplitSecond  [Steam]
+        Steam (English) version, fix not installed
+     2. /home/deck/Games/Split Second  [Steam shortcut "Split/Second"]
+        retail version, fix installed (this version)
+
+   Choose a game [1-2], or q to quit:
+   ```
+   Pick a number, then **i** to install, or **r** to reinstall / update and **u** to uninstall.
+
+   If your copy is not in the list (it is not added to Steam), pass its folder instead — replace
+   the path with the folder where *your* copy of the game is:
    ```
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
+   Run from the game folder itself, the installer works on that folder without asking.
 3. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
 4. Start the game.
 

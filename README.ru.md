@@ -50,7 +50,7 @@ Steam Deck / Linux. В каждом — один установщик, в кот
 
 ### Steam Deck / Linux (Proton)
 
-1. В режиме рабочего стола скопируйте `ssfix-install` в папку игры (рядом с `SplitSecond.exe`).
+1. В режиме рабочего стола распакуйте архив куда угодно, например в `Загрузки`.
 2. Откройте терминал в этой папке (в Dolphin: правой кнопкой по пустому месту →
    **Открыть терминал**) и выполните:
    ```
@@ -58,11 +58,25 @@ Steam Deck / Linux. В каждом — один установщик, в кот
    ```
    (если система ответит «Permission denied», сначала выполните `chmod +x ssfix-install`)
 
-   Или оставьте `ssfix-install` где угодно и укажите папку игры — замените путь ниже на папку,
-   куда установлена *ваша* игра:
+   Установщик сам найдёт игру через Steam — Steam-версию и ярлыки на `SplitSecond.exe`, добавленные
+   как игры не из Steam, — и покажет все копии с состоянием фикса в каждой:
+   ```
+   Found Split/Second:
+     1. /home/deck/.local/share/Steam/steamapps/common/SplitSecond  [Steam]
+        Steam (English) version, fix not installed
+     2. /home/deck/Games/Split Second  [Steam shortcut "Split/Second"]
+        retail version, fix installed (this version)
+
+   Choose a game [1-2], or q to quit:
+   ```
+   Введите номер, затем **i** — установить, или **r** — переустановить / обновить, **u** — удалить.
+
+   Если вашей копии нет в списке (она не добавлена в Steam), укажите её папку — замените путь на
+   папку, где лежит *ваша* игра:
    ```
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
+   Если запустить установщик из самой папки игры, он сразу работает с ней, ничего не спрашивая.
 3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
 4. Запустите игру.
 

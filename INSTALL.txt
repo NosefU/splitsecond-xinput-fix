@@ -23,14 +23,15 @@ Windows
      рассчитан фикс.
 
 Steam Deck / Linux (Proton)
-  1. В режиме рабочего стола скопируйте ssfix-install в папку игры (рядом с
-     SplitSecond.exe).
+  1. В режиме рабочего стола распакуйте архив куда угодно.
   2. Откройте терминал в этой папке (в Dolphin: правой кнопкой по пустому месту ->
      "Открыть терминал") и выполните:
          ./ssfix-install
      (если система ответит "Permission denied", сначала: chmod +x ssfix-install)
-     Или оставьте ssfix-install где угодно и укажите папку игры (путь ниже - только
-     пример, замените его на папку, куда установлена ваша игра):
+     Установщик найдёт игру через Steam (Steam-версию и ярлыки на SplitSecond.exe),
+     покажет список копий с состоянием фикса и спросит, что сделать:
+     i - установить, r - переустановить / обновить, u - удалить.
+     Если вашей копии нет в списке, укажите её папку (путь ниже - только пример):
          ./ssfix-install "/home/deck/Games/Split Second"
   3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
   4. Запустите игру. Управление один раз сбросится на раскладку фикса.
@@ -76,12 +77,14 @@ SplitSecond.exe). Needs the original, unmodified data/resident.ark.
 Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
 game folder as an argument), then start the game.
 
-Steam Deck / Linux: copy ssfix-install into the game folder, open a terminal
-there (Dolphin: right-click -> Open Terminal Here) and run
+Steam Deck / Linux: unpack anywhere, open a terminal there (Dolphin:
+right-click -> Open Terminal Here) and run
     ./ssfix-install
-(or run it from anywhere with your game folder as the argument:
-./ssfix-install "/path/to/your/Split Second"), use a plain gamepad layout in
-Steam Input. The installer enables the DLL in the game's Proton prefix itself;
+It finds the game through Steam (the Steam version and shortcuts to
+SplitSecond.exe), lists the copies with the state of the fix and asks what to
+do: i - install, r - reinstall / update, u - uninstall. If your copy is not
+listed, pass its folder: ./ssfix-install "/path/to/your/Split Second".
+Use a plain gamepad layout in Steam Input. The installer enables the DLL in the game's Proton prefix itself;
 if it reports that it could not, add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%
 to the game's launch options in Steam.

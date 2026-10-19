@@ -187,6 +187,13 @@ contain it, the text is left alone.
    unless a `wineserver` is running (Wine would overwrite the file on exit), and lists the changed
    files in `ssfix/proton-prefixes.txt`.
 
+Without a game folder, and with no `SplitSecond.exe` in the current folder or next to the installer,
+the Linux installer looks for the game through Steam: `appmanifest_297860.acf` in every library
+(the Steam version) and non-Steam shortcuts whose `Exe` is a `SplitSecond.exe`. It lists each
+copy with the build and the state of the fix — not installed, installed (this version: the DLL is
+byte for byte the embedded one, or another version), needs reinstalling (the DLL is there but the
+archive is not patched, e.g. after Steam replaced it), unsupported — and asks what to do.
+
 Running it again first rolls back the previous installation, so the archive does not grow.
 Uninstall restores the table records, truncates the archive to its original size (it then matches
 the original byte for byte) and removes the DLL (restoring a `.bak`), the marker, the script,

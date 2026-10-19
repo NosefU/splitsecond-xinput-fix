@@ -643,78 +643,41 @@ static int steam_appid(const char *game, char *appid, size_t size)
     return 0;
 }
 
-/* Non-Steam shortcut: binary shortcuts.vdf, entries with "appid" (int32) and
- * "Exe" / "StartDir" (strings). Returns the appid of a shortcut to the game. */
-static int vdf_shortcut(const uint8_t *p, const uint8_t *end, const char *game, uint32_t *appid)
+/* Non-Steam shortcuts: binary userdata/<account>/config/shortcuts.vdf, a map
+ * "shortcuts" of maps "0", "1", ... with fields such as appid (int32),
+ * AppName, Exe and StartDir (strings). Field types: 0 map, 1 string,
+ * 2 int32, 7 int64, 8 end of map. */
+struct shortcut { uint32_t appid; char name[256], exe[PATH_MAX], start_dir[PATH_MAX]; };
+
+/* Skips the rest of a map; returns the byte after its end marker, or NULL. */
+static const uint8_t *vdf_skip_map(const uint8_t *p, const uint8_t *end)
 {
-    uint32_t id = 0;
-    int match = 0;
-    while (p < end && *p != 8)
+    int depth = 1;
+    while (p < end && depth)
     {
         uint8_t type = *p++;
-        const char *name = (const char *)p;
-        p = memchr(p, 0, end - p);
-        if (!p) return 0;
+        if (type == 8) { depth--; continue; }
+        if (!(p = memchr(p, 0, end - p))) return NULL;
         p++;
-        if (type == 0)
-        {
-            /* nested map (the shortcut list itself, or "tags") */
-            int depth = 1;
-            const uint8_t *start = p;
-            if (!strcasecmp(name, "tags"))
-            {
-                while (p < end && depth)
-                {
-                    uint8_t t = *p++;
-                    if (t == 8) { depth--; continue; }
-                    p = memchr(p, 0, end - p);
-                    if (!p) return 0;
-                    p++;
-                    if (t == 0) depth++;
-                    else if (t == 1) { p = memchr(p, 0, end - p); if (!p) return 0; p++; }
-                    else if (t == 2) p += 4;
-                    else if (t == 7) p += 8;
-                    else return 0;
-                }
-                continue;
-            }
-            if (vdf_shortcut(start, end, game, appid)) return 1;
-            return 0;  /* only one level of entries is searched */
-        }
-        else if (type == 1)
-        {
-            const char *val = (const char *)p;
-            p = memchr(p, 0, end - p);
-            if (!p) return 0;
-            p++;
-            if (!strcasecmp(name, "Exe") || !strcasecmp(name, "StartDir"))
-            {
-                char path[PATH_MAX], real[PATH_MAX];
-                snprintf(path, sizeof(path), "%s", val[0] == '"' ? val + 1 : val);
-                char *q = strrchr(path, '"');
-                if (q) *q = 0;
-                if (!strcasecmp(name, "Exe") && (q = strrchr(path, '/'))) *q = 0;
-                if (realpath(path, real) && !strcmp(real, game)) match = 1;
-            }
-        }
-        else if (type == 2)
-        {
-            if (p + 4 > end) return 0;
-            if (!strcasecmp(name, "appid")) id = rd32(p);
-            p += 4;
-        }
+        if (type == 0) depth++;
+        else if (type == 1) { if (!(p = memchr(p, 0, end - p))) return NULL; p++; }
+        else if (type == 2) p += 4;
         else if (type == 7) p += 8;
-        else return 0;
+        else return NULL;
     }
-    if (match && id)
-    {
-        *appid = id;
-        return 1;
-    }
-    return 0;
+    return depth ? NULL : p;
 }
 
-static int shortcut_appid(const char *game, char *appid, size_t size)
+/* "\"/path/to/file\"" or "/path/to/file" -> /path/to/file */
+static void unquote(const char *in, char *out, size_t size)
+{
+    char *q;
+    snprintf(out, size, "%s", in[0] == '"' ? in + 1 : in);
+    if ((q = strchr(out, '"'))) *q = 0;
+}
+
+/* Calls cb for every shortcut of every Steam account; stops when cb returns non-zero. */
+static int for_each_shortcut(int (*cb)(const struct shortcut *, void *), void *ctx)
 {
     for (int i = 0; i < steam_lib_count; i++)
     {
@@ -728,46 +691,47 @@ static int shortcut_appid(const char *game, char *appid, size_t size)
             char path[PATH_MAX * 2];
             uint8_t *data;
             long len;
-            uint32_t id;
+            int stop = 0;
             if (e->d_name[0] == '.') continue;
             snprintf(path, sizeof(path), "%s/%s/config/shortcuts.vdf", dir, e->d_name);
             if (!(data = (uint8_t *)read_text(path, &len))) continue;
-            /* root map "shortcuts" holding maps "0", "1", ... */
             const uint8_t *p = data, *end = data + len;
-            int found = 0;
             if (len > 11 && p[0] == 0 && !strcasecmp((const char *)p + 1, "shortcuts"))
-            {
-                p += 11;
-                while (!found && p < end && *p == 0)
+                for (p += 11; !stop && p && p < end && *p == 0; )
                 {
-                    const uint8_t *body = memchr(p + 1, 0, end - p - 1);
-                    if (!body) break;
-                    body++;
-                    found = vdf_shortcut(body, end, game, &id);
-                    /* skip this entry: find its end by a nested walk */
-                    int depth = 1;
-                    const uint8_t *q = body;
-                    while (q < end && depth)
+                    struct shortcut sc = {0};
+                    if (!(p = memchr(p + 1, 0, end - p - 1))) break;
+                    for (p++; p && p < end && *p != 8; )
                     {
-                        uint8_t t = *q++;
-                        if (t == 8) { depth--; continue; }
-                        q = memchr(q, 0, end - q);
-                        if (!q) break;
-                        q++;
-                        if (t == 0) depth++;
-                        else if (t == 1) { q = memchr(q, 0, end - q); if (!q) break; q++; }
-                        else if (t == 2) q += 4;
-                        else if (t == 7) q += 8;
-                        else { q = NULL; break; }
+                        uint8_t type = *p++;
+                        const char *name = (const char *)p;
+                        if (!(p = memchr(p, 0, end - p))) break;
+                        p++;
+                        if (type == 0) p = vdf_skip_map(p, end);
+                        else if (type == 1)
+                        {
+                            const char *val = (const char *)p;
+                            if (!(p = memchr(p, 0, end - p))) break;
+                            p++;
+                            if (!strcasecmp(name, "AppName")) snprintf(sc.name, sizeof(sc.name), "%s", val);
+                            else if (!strcasecmp(name, "Exe")) unquote(val, sc.exe, sizeof(sc.exe));
+                            else if (!strcasecmp(name, "StartDir")) unquote(val, sc.start_dir, sizeof(sc.start_dir));
+                        }
+                        else if (type == 2 && p + 4 <= end)
+                        {
+                            if (!strcasecmp(name, "appid")) sc.appid = rd32(p);
+                            p += 4;
+                        }
+                        else if (type == 7) p += 8;
+                        else p = NULL;
                     }
-                    if (!q) break;
-                    p = q;
+                    if (!p || p >= end) break;
+                    p++;  /* end of this shortcut */
+                    stop = cb(&sc, ctx);
                 }
-            }
             free(data);
-            if (found)
+            if (stop)
             {
-                snprintf(appid, size, "%u", id);
                 closedir(d);
                 return 1;
             }
@@ -775,6 +739,41 @@ static int shortcut_appid(const char *game, char *appid, size_t size)
         closedir(d);
     }
     return 0;
+}
+
+/* Directory part of a path, resolved; FALSE if it does not exist. */
+static int real_dir_of(const char *file, char *out)
+{
+    char dir[PATH_MAX], *slash;
+    snprintf(dir, sizeof(dir), "%s", file);
+    if (!(slash = strrchr(dir, '/'))) return 0;
+    *slash = 0;
+    return realpath(dir[0] ? dir : "/", out) != NULL;
+}
+
+struct appid_search { const char *game; uint32_t appid; };
+
+/* A shortcut belongs to the game if its Exe is in the game folder or its StartDir is the game folder. */
+static int match_shortcut(const struct shortcut *sc, void *ctx)
+{
+    struct appid_search *s = ctx;
+    char real[PATH_MAX];
+    if (!sc->appid) return 0;
+    if ((sc->exe[0] && real_dir_of(sc->exe, real) && !strcmp(real, s->game))
+        || (sc->start_dir[0] && realpath(sc->start_dir, real) && !strcmp(real, s->game)))
+    {
+        s->appid = sc->appid;
+        return 1;
+    }
+    return 0;
+}
+
+static int shortcut_appid(const char *game, char *appid, size_t size)
+{
+    struct appid_search s = { game, 0 };
+    if (!for_each_shortcut(match_shortcut, &s)) return 0;
+    snprintf(appid, size, "%u", s.appid);
+    return 1;
 }
 
 static int wine_running(void)
@@ -956,24 +955,33 @@ static void proton_uninstall(void)
 
 /* ---- game folder ---- */
 
-static void check_exe(void)
+/* Index in exe_builds of the game's SplitSecond.exe, -1 if unsupported, -2 if missing. */
+static int exe_build(uint32_t *timestamp)
 {
     char path[4200];
     uint8_t buf[0x2000];  /* the SecuROM builds have a long DOS stub: PE header at 0xd20-0xd40 */
     FILE *f;
+    *timestamp = 0;
     path_join(path, sizeof(path), "SplitSecond.exe");
-    if (!(f = fopen(path, "rb"))) fail("SplitSecond.exe not found in %s", game_dir);
-    if (fread(buf, 1, sizeof(buf), f) != sizeof(buf)) fail("cannot read SplitSecond.exe");
+    if (!(f = fopen(path, "rb"))) return -2;
+    size_t n = fread(buf, 1, sizeof(buf), f);
     fclose(f);
-    uint32_t pe = rd32(buf + 0x3c);
-    if (pe > sizeof(buf) - 0x60 || memcmp(buf + pe, "PE\0\0", 4)) fail("SplitSecond.exe is not a valid exe");
+    uint32_t pe = n == sizeof(buf) ? rd32(buf + 0x3c) : 0;
+    if (!pe || pe > sizeof(buf) - 0x60 || memcmp(buf + pe, "PE\0\0", 4)) return -1;
+    *timestamp = rd32(buf + pe + 8);
     for (size_t i = 0; i < sizeof(exe_builds) / sizeof(*exe_builds); i++)
-        if (rd32(buf + pe + 8) == exe_builds[i].timestamp && rd32(buf + pe + 24 + 56) == exe_builds[i].image_size)
-        {
-            printf("SplitSecond.exe: %s version\n", exe_builds[i].name);
-            return;
-        }
-    fail("this SplitSecond.exe version is not supported (timestamp %08x)", rd32(buf + pe + 8));
+        if (*timestamp == exe_builds[i].timestamp && rd32(buf + pe + 24 + 56) == exe_builds[i].image_size)
+            return (int)i;
+    return -1;
+}
+
+static void check_exe(void)
+{
+    uint32_t timestamp;
+    int build = exe_build(&timestamp);
+    if (build == -2) fail("SplitSecond.exe not found in %s", game_dir);
+    if (build < 0) fail("this SplitSecond.exe version is not supported (timestamp %08x)", timestamp);
+    printf("SplitSecond.exe: %s version\n", exe_builds[build].name);
 }
 
 static void find_game_dir(const char *arg, const char *argv0)
@@ -998,25 +1006,10 @@ static void find_game_dir(const char *arg, const char *argv0)
     }
 }
 
-int main(int argc, char **argv)
+static void run(int uninstall)
 {
-    int uninstall = 0;
-    const char *dir = NULL;
-    for (int i = 1; i < argc; i++)
-    {
-        if (!strcmp(argv[i], "--uninstall") || !strcmp(argv[i], "-u")) uninstall = 1;
-        else if (!strcmp(argv[i], "--from-script")) from_script = 1;
-        else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h"))
-        {
-            printf("usage: %s [--uninstall] [game folder]\n", argv[0]);
-            return 0;
-        }
-        else dir = argv[i];
-    }
-    find_game_dir(dir, argv[0]);
-    printf("Split/Second gamepad fix %s\ngame folder: %s\n", PAYLOAD_VERSION, game_dir);
+    printf("game folder: %s\n", game_dir);
     check_exe();
-
     if (uninstall)
     {
 #ifndef _WIN32
@@ -1038,6 +1031,199 @@ int main(int argc, char **argv)
 #endif
         printf("Installed.\n");
     }
+}
+
+#ifndef _WIN32
+/* ---- finding the game through Steam ----
+ * Without a game folder the installer lists the copies Steam knows about:
+ * the Steam version (appmanifest_297860.acf -> steamapps/common/<installdir>)
+ * and non-Steam shortcuts whose Exe is a SplitSecond.exe, with the state of
+ * the fix in each, and asks what to do. */
+#include <sys/stat.h>
+
+#define MAX_GAMES 16
+static struct game { char dir[PATH_MAX], source[320]; } games[MAX_GAMES];
+static int game_count;
+
+static void add_game(const char *dir, const char *source)
+{
+    char real[PATH_MAX], exe[PATH_MAX + 32];
+    if (game_count == MAX_GAMES || !realpath(dir, real)) return;
+    snprintf(exe, sizeof(exe), "%s/SplitSecond.exe", real);
+    if (access(exe, R_OK)) return;
+    for (int i = 0; i < game_count; i++)
+        if (!strcmp(games[i].dir, real)) return;
+    snprintf(games[game_count].dir, PATH_MAX, "%s", real);
+    snprintf(games[game_count].source, sizeof(games[0].source), "%s", source);
+    game_count++;
+}
+
+static int collect_shortcut(const struct shortcut *sc, void *ctx)
+{
+    const char *name = strrchr(sc->exe, '/');
+    char dir[PATH_MAX], source[300];
+    (void)ctx;
+    if (!name || strcasecmp(name + 1, "SplitSecond.exe") || !real_dir_of(sc->exe, dir)) return 0;
+    snprintf(source, sizeof(source), "Steam shortcut \"%.250s\"", sc->name);
+    add_game(dir, source);
+    return 0;
+}
+
+static void find_games(void)
+{
+    find_steam_libs();
+    for (int i = 0; i < steam_lib_count; i++)
+    {
+        char path[PATH_MAX + 64], dir[PATH_MAX * 2], *text, *p, *q;
+        snprintf(path, sizeof(path), "%s/steamapps/appmanifest_297860.acf", steam_libs[i]);
+        if (!(text = read_text(path, NULL))) continue;
+        if ((p = strstr(text, "\"installdir\"")) && (p = strchr(p + 12, '"')) && (q = strchr(p + 1, '"')))
+        {
+            *q = 0;
+            snprintf(dir, sizeof(dir), "%s/steamapps/common/%s", steam_libs[i], p + 1);
+            add_game(dir, "Steam");
+        }
+        free(text);
+    }
+    for_each_shortcut(collect_shortcut, NULL);
+}
+
+enum { ST_MISSING, ST_UNSUPPORTED, ST_NOT_INSTALLED, ST_INSTALLED, ST_INSTALLED_OTHER, ST_BROKEN };
+
+/* State of the fix in game_dir. */
+static int fix_state(uint32_t *timestamp, int *build)
+{
+    char path[4200];
+    struct sidecar sc;
+    int dll, patched = 0;
+    if ((*build = exe_build(timestamp)) == -2) return ST_MISSING;
+    if (*build < 0) return ST_UNSUPPORTED;
+    path_join(path, sizeof(path), "xinput1_3.dll");
+    dll = is_our_dll(path);
+    if (file_exists("data/resident.ark") && load_sidecar(&sc))
+    {
+        uint32_t count;
+        FILE *f = open_archive(&count);
+        patched = archive_is_patched(f, count, &sc);
+        fclose(f);
+    }
+    if (!dll && !patched) return ST_NOT_INSTALLED;
+    if (!dll || !patched) return ST_BROKEN;
+    /* same version if the DLL is byte for byte the one built into this installer */
+    uint8_t *buf = NULL;
+    long len = -1;
+    FILE *f = fopen(path, "rb");
+    if (f)
+    {
+        fseek(f, 0, SEEK_END);
+        len = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (len == (long)payload_dll_size && (buf = malloc(len)) && fread(buf, 1, len, f) != (size_t)len) len = -1;
+        fclose(f);
+    }
+    int same = buf && len == (long)payload_dll_size && !memcmp(buf, payload_dll, len);
+    free(buf);
+    return same ? ST_INSTALLED : ST_INSTALLED_OTHER;
+}
+
+static const char *state_text(int state, uint32_t timestamp, int build)
+{
+    static char text[200];
+    const char *name = build >= 0 ? exe_builds[build].name : "";
+    switch (state)
+    {
+    case ST_UNSUPPORTED: snprintf(text, sizeof(text), "unsupported SplitSecond.exe (timestamp %08x)", timestamp); break;
+    case ST_NOT_INSTALLED: snprintf(text, sizeof(text), "%s version, fix not installed", name); break;
+    case ST_INSTALLED: snprintf(text, sizeof(text), "%s version, fix installed (this version)", name); break;
+    case ST_INSTALLED_OTHER: snprintf(text, sizeof(text), "%s version, fix installed (another version)", name); break;
+    case ST_BROKEN: snprintf(text, sizeof(text), "%s version, fix needs reinstalling (game files were replaced)", name); break;
+    default: snprintf(text, sizeof(text), "SplitSecond.exe not found");
+    }
+    return text;
+}
+
+static int ask(const char *prompt, char *answer, size_t size)
+{
+    printf("%s", prompt);
+    fflush(stdout);
+    if (!fgets(answer, (int)size, stdin)) return 0;
+    answer[strcspn(answer, "\r\n")] = 0;
+    return 1;
+}
+
+static int menu(void)
+{
+    char answer[32];
+    int states[MAX_GAMES], builds[MAX_GAMES], choice;
+    uint32_t stamps[MAX_GAMES];
+    find_games();
+    if (!game_count)
+    {
+        printf("\nSplit/Second was not found through Steam. Run the installer with the game folder:\n"
+               "  ./ssfix-install \"/path/to/Split Second\"\n");
+        return 1;
+    }
+    printf("\nFound Split/Second:\n");
+    for (int i = 0; i < game_count; i++)
+    {
+        snprintf(game_dir, sizeof(game_dir), "%s", games[i].dir);
+        states[i] = fix_state(&stamps[i], &builds[i]);
+        printf("  %d. %s  [%s]\n     %s\n", i + 1, games[i].dir, games[i].source, state_text(states[i], stamps[i], builds[i]));
+    }
+    if (!isatty(0))
+    {
+        printf("\nRun the installer in a terminal to choose, or pass the game folder.\n");
+        return 1;
+    }
+    if (game_count == 1) choice = 1;
+    else
+    {
+        char prompt[64];
+        snprintf(prompt, sizeof(prompt), "\nChoose a game [1-%d], or q to quit: ", game_count);
+        if (!ask(prompt, answer, sizeof(answer)) || (choice = atoi(answer)) < 1 || choice > game_count) return 0;
+    }
+    int st = states[choice - 1];
+    snprintf(game_dir, sizeof(game_dir), "%s", games[choice - 1].dir);
+    printf("\n%s\n%s\n", game_dir, state_text(st, stamps[choice - 1], builds[choice - 1]));
+    if (st == ST_UNSUPPORTED || st == ST_MISSING) return 1;
+    if (st == ST_NOT_INSTALLED)
+    {
+        if (!ask("  i) install    q) quit\n> ", answer, sizeof(answer)) || answer[0] != 'i') return 0;
+        printf("\n");
+        run(0);
+        return 0;
+    }
+    if (!ask("  r) reinstall / update    u) uninstall    q) quit\n> ", answer, sizeof(answer))) return 0;
+    if (answer[0] != 'r' && answer[0] != 'u') return 0;
+    printf("\n");
+    run(answer[0] == 'u');
+    return 0;
+}
+#endif
+
+int main(int argc, char **argv)
+{
+    int uninstall = 0;
+    const char *dir = NULL;
+    for (int i = 1; i < argc; i++)
+    {
+        if (!strcmp(argv[i], "--uninstall") || !strcmp(argv[i], "-u")) uninstall = 1;
+        else if (!strcmp(argv[i], "--from-script")) from_script = 1;
+        else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h"))
+        {
+            printf("usage: %s [--uninstall] [game folder]\n"
+                   "Without a folder: the current folder or the installer's own one if the game is there;\n"
+                   "otherwise (Linux) the copies of the game found through Steam are listed to choose from.\n", argv[0]);
+            return 0;
+        }
+        else dir = argv[i];
+    }
+    printf("Split/Second gamepad fix %s\n", PAYLOAD_VERSION);
+    find_game_dir(dir, argv[0]);
+#ifndef _WIN32
+    if (!dir && !file_exists("SplitSecond.exe")) return menu();
+#endif
+    run(uninstall);
     pause_on_windows();
     return 0;
 }

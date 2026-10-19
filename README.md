@@ -45,8 +45,9 @@ Steam Deck / Linux. Each contains a single installer with everything the fix nee
    Windows asks for administrator rights: the game folder is usually under `Program Files`. If
    SmartScreen says the app is unrecognised, click **More info → Run anyway**.
 2. The installer finds the game — the Steam version and the one installed from disc — and lists
-   each copy with the state of the fix. Pick one (if there are several), then press `i` to
-   install, `r` to reinstall / update or `u` to uninstall.
+   each copy with the state of the fix. Type its number (if there are several), then `1` to
+   install; if the fix is already there, `1` to reinstall / update or `2` to uninstall
+   (`0` quits).
 
    If your copy is not listed, copy `ssfix-install.exe` into the game folder (next to
    `SplitSecond.exe`) and run it there: then it installs into that folder without asking. Or pass
@@ -74,9 +75,10 @@ No DirectX installation is needed for the fix itself.
      2. /home/deck/Games/Split Second  [Steam shortcut "Split/Second"]
         retail version, fix installed (this version)
 
-   Choose a game [1-2], or q to quit:
+   Choose a game [1-2], 0 to quit:
    ```
-   Pick a number, then **i** to install, or **r** to reinstall / update and **u** to uninstall.
+   Type the game's number, then **1** to install; if the fix is already there, **1** to reinstall /
+   update or **2** to uninstall (**0** quits).
 
    If your copy is not in the list (it is not added to Steam), pass its folder instead — replace
    the path with the folder where *your* copy of the game is:

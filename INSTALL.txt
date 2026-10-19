@@ -21,7 +21,8 @@ Windows
      приложение не распознано: "Подробнее" -> "Выполнить в любом случае".
      Установщик найдёт игру (Steam-версию и установленную с диска), покажет
      список копий с состоянием фикса и спросит, что сделать:
-     i - установить, r - переустановить / обновить, u - удалить.
+     1 - установить; если фикс уже стоит: 1 - переустановить / обновить,
+     2 - удалить; 0 - выход.
      Если вашей копии нет в списке, скопируйте ssfix-install.exe в папку игры
      (рядом с SplitSecond.exe) и запустите там - тогда он сразу ставит фикс в
      эту папку. Или передайте папку игры:
@@ -37,7 +38,8 @@ Steam Deck / Linux (Proton)
      (если система ответит "Permission denied", сначала: chmod +x ssfix-install)
      Установщик найдёт игру через Steam (Steam-версию и ярлыки на SplitSecond.exe),
      покажет список копий с состоянием фикса и спросит, что сделать:
-     i - установить, r - переустановить / обновить, u - удалить.
+     1 - установить; если фикс уже стоит: 1 - переустановить / обновить,
+     2 - удалить; 0 - выход.
      Если вашей копии нет в списке, укажите её папку (путь ниже - только пример):
          ./ssfix-install "/home/deck/Games/Split Second"
   3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
@@ -83,10 +85,11 @@ SplitSecond.exe). Needs the original, unmodified data/resident.ark.
 
 Windows: unpack anywhere, run ssfix-install.exe and allow administrator rights.
 It finds the game (the Steam version and the one installed from disc), lists
-the copies with the state of the fix and asks what to do: i - install,
-r - reinstall / update, u - uninstall. If your copy is not listed, put
-ssfix-install.exe next to SplitSecond.exe and run it there (it then installs
-into that folder straight away), or pass the game folder as an argument.
+the copies with the state of the fix and asks what to do: 1 - install; if the
+fix is there: 1 - reinstall / update, 2 - uninstall; 0 - quit. If your copy is
+not listed, put ssfix-install.exe next to SplitSecond.exe and run it there (it
+then installs into that folder straight away), or pass the game folder as an
+argument.
 Then start the game.
 
 Steam Deck / Linux: unpack anywhere, open a terminal there (Dolphin:
@@ -94,8 +97,9 @@ right-click -> Open Terminal Here) and run
     ./ssfix-install
 It finds the game through Steam (the Steam version and shortcuts to
 SplitSecond.exe), lists the copies with the state of the fix and asks what to
-do: i - install, r - reinstall / update, u - uninstall. If your copy is not
-listed, pass its folder: ./ssfix-install "/path/to/your/Split Second".
+do: 1 - install; if the fix is there: 1 - reinstall / update, 2 - uninstall;
+0 - quit. If your copy is not listed, pass its folder:
+./ssfix-install "/path/to/your/Split Second".
 Use a plain gamepad layout in Steam Input. The installer enables the DLL in the game's Proton prefix itself;
 if it reports that it could not, add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%

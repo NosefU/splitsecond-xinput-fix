@@ -1270,7 +1270,7 @@ static int menu(void)
     else
     {
         char prompt[64];
-        snprintf(prompt, sizeof(prompt), "\nChoose a game [1-%d], or q to quit: ", game_count);
+        snprintf(prompt, sizeof(prompt), "\nChoose a game [1-%d], 0 to quit: ", game_count);
         if (!ask(prompt, answer, sizeof(answer)) || (choice = atoi(answer)) < 1 || choice > game_count) return 0;
     }
     int st = states[choice - 1];
@@ -1279,15 +1279,15 @@ static int menu(void)
     if (st == ST_UNSUPPORTED || st == ST_MISSING) return 1;
     if (st == ST_NOT_INSTALLED)
     {
-        if (!ask("  i) install    q) quit\n> ", answer, sizeof(answer)) || answer[0] != 'i') return 0;
+        if (!ask("  1) install    0) quit\n> ", answer, sizeof(answer)) || atoi(answer) != 1) return 0;
         printf("\n");
         run(0);
         return 0;
     }
-    if (!ask("  r) reinstall / update    u) uninstall    q) quit\n> ", answer, sizeof(answer))) return 0;
-    if (answer[0] != 'r' && answer[0] != 'u') return 0;
+    if (!ask("  1) reinstall / update    2) uninstall    0) quit\n> ", answer, sizeof(answer))) return 0;
+    if ((choice = atoi(answer)) != 1 && choice != 2) return 0;
     printf("\n");
-    run(answer[0] == 'u');
+    run(choice == 2);
     return 0;
 }
 

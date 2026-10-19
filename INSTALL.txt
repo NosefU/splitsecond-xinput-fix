@@ -6,8 +6,8 @@ Split/Second gamepad fix
 Управление геймпадом во всех меню, иконки кнопок Xbox вместо клавиш в подсказках
 меню, на заставке и в подсказках во время гонки.
 
-Работает с SplitSecond.exe PC-версии с меткой сборки 4BE3EA74 (установщик это
-проверяет и откажется работать с другой версией). Нужен оригинальный, не
+Работает с коробочной и со Steam-версией игры (установщик проверяет
+SplitSecond.exe и откажется работать с другой версией). Нужен оригинальный, не
 изменённый data/resident.ark.
 
 Состав
@@ -35,8 +35,14 @@ Steam Deck / Linux (Proton)
   3. В Steam: свойства игры -> Параметры запуска, добавьте:
          WINEDLLOVERRIDES="xinput1_3=n,b" %command%
      (без этого Proton не загрузит DLL из папки игры)
-  4. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
-  5. Запустите игру. Управление один раз сбросится на раскладку фикса.
+  4. Только для Steam-версии: свойства игры -> Совместимость, включите
+     принудительно Proton Experimental. С Proton 11.0 меню не реагируют на
+     геймпад (иконки при этом работают).
+  5. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
+  6. Запустите игру. Управление один раз сбросится на раскладку фикса.
+
+С геймпадом Xbox 360 игра сама управляет меню; фикс это замечает и только
+показывает иконки кнопок.
 
 Геймпад
   В меню:   D-pad / левый стик - выбор, A - подтвердить, B - назад,
@@ -61,8 +67,8 @@ Steam Deck / Linux (Proton)
 Gamepad navigation in all menus; Xbox button icons instead of keyboard keys in
 the menu hints, on the title screen and in race hints.
 
-Works with SplitSecond.exe of the PC release with build timestamp 4BE3EA74 (the
-installer checks it). Needs the original, unmodified data/resident.ark.
+Works with the boxed and the Steam version of the game (the installer checks
+SplitSecond.exe). Needs the original, unmodified data/resident.ark.
 
 Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
 game folder as an argument), then start the game.
@@ -74,6 +80,8 @@ there (Dolphin: right-click -> Open Terminal Here) and run
 ./ssfix-install "/path/to/your/Split Second"). Then add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%
 to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
+Steam version: also force Proton Experimental in Properties -> Compatibility,
+otherwise the menus ignore the gamepad.
 
 On the first start the controls are reset once to the layout the fix expects.
 To uninstall, run "Uninstall gamepad fix.bat" (Windows) or

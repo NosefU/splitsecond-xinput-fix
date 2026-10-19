@@ -5,9 +5,18 @@
 The fix consists of an `xinput1_3.dll` proxy placed next to `SplitSecond.exe`, changes to two UI
 movies inside `data/resident.ark`, and an installer that applies and removes all of it.
 
-All addresses below are for `SplitSecond.exe` with `TimeDateStamp 0x4BE3EA74` and
-`SizeOfImage 0x1A64000` (the SecuROM-protected PC release). With any other exe the proxy changes
-nothing and only forwards XInput calls.
+Two builds of `SplitSecond.exe` are supported, both protected by SecuROM:
+
+| Build | `TimeDateStamp` | `SizeOfImage` | PE header |
+|---|---|---|---|
+| boxed (retail) | `0x4BE3EA74` | `0x1A64000` | `0xD40` |
+| Steam (with an extra Steam DRM section `.bind`) | `0x4BE13C66` | `0x1DB7000` | `0xD20` |
+
+The code is the same, only moved: in the Steam build `.data` is `0x1000` lower and the functions
+are a few hundred bytes lower. The addresses below are for the retail build; the Steam ones are in
+the `builds` table in `src/xinput_fix.c`. They were found with `tools/port_addrs.py` on memory
+dumps of both builds (see [tools](tooling.md)). With any other exe the proxy changes nothing and
+only forwards XInput calls. The UI movies are byte-identical in both builds.
 
 ## XInput proxy (`src/xinput_fix.c`)
 
@@ -31,6 +40,21 @@ results), button presses are turned into key presses with `SendInput`:
 A button held while the game switches between menu and race only acts after it is released. In
 races the proxy stays out of the way: sticks, triggers and buttons reach the game through
 DirectInput as bound in its options. The game pauses only on Esc, so Start → Esc is always active.
+
+### Xbox 360 pads
+
+The game sorts DirectInput devices by `guidProduct` (function `0x40DB10`): the Xbox 360 pad
+(`045E:028E`) and the wireless receiver (`045E:02A1`) get type 0, several Logitech, Saitek and
+other devices get their own types. With an Xbox 360 pad the game navigates its menus by itself, so
+key emulation would make every press count twice. The proxy enumerates DirectInput game
+controllers every 3 s and switches key emulation off while such a pad is attached.
+
+On Steam Deck this is what Proton Experimental does for the Steam version (app 297860): it sets
+`PROTON_SPOOF_STEAMINPUT_VIDPID=1`, which gives the Steam Input virtual pad the Xbox 360 IDs.
+Proton 11.0 has no such fix yet, and there the Steam version does not see the pad through XInput at
+all, so the menus stay keyboard-only.
+
+### Menu and race detection
 
 Menus and races are told apart by two globals in the exe's `.data`, found by comparing memory
 snapshots taken in different game states:
@@ -132,7 +156,7 @@ contain it, the text is left alone.
 
 ## Installer (`installer/ssfix_install.c`)
 
-1. Checks the `SplitSecond.exe` version from its PE header (at `0xD40` in this build).
+1. Checks the `SplitSecond.exe` build from its PE header (`TimeDateStamp` and `SizeOfImage`).
 2. For each change (`patch/*.ssdf`) finds the entry in `data/resident.ark` by name hash, unpacks
    it and checks its size and CRC32 against the ones the diff was made for. If the archive was
    already modified or the game version differs, it refuses and changes nothing.

@@ -21,13 +21,15 @@ accelerate"). With this fix:
   <img src="docs/images/race-hint.jpg" width="49%" alt="Race hint with LT and left stick icons">
 </p>
 
-Tested on Steam Deck with the built-in controller. Any XInput gamepad (Xbox 360 / One / Series or
-compatible) should work the same way on Windows.
+Tested on Steam Deck with the built-in controller, with both the boxed and the Steam version.
+Any XInput gamepad (Xbox One / Series or compatible) should work the same way on Windows. With an
+Xbox 360 pad the game already handles the menus by itself; the fix notices that and only adds the
+button icons.
 
 ## Requirements
 
-- The PC version of Split/Second whose `SplitSecond.exe` has build timestamp `4BE3EA74` (the
-  installer checks this and refuses other versions).
+- The PC version of Split/Second: the boxed (retail) release or the Steam release. The installer
+  checks `SplitSecond.exe` and refuses other versions.
 - The original, unmodified `data/resident.ark`.
 
 ## Installation
@@ -66,8 +68,12 @@ No DirectX installation is needed for the fix itself.
    WINEDLLOVERRIDES="xinput1_3=n,b" %command%
    ```
    Without it Proton ignores the fix.
-4. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
-5. Start the game.
+4. **Steam version only:** in **Properties → Compatibility**, force **Proton Experimental**.
+   Valve's fix for this game in Proton Experimental makes the Steam Deck controller look like an
+   Xbox 360 pad, and then the game navigates its menus by itself. With Proton 11.0 the menus do
+   not react to the gamepad (the button icons still work).
+5. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
+6. Start the game.
 
 ## Controls
 
@@ -95,6 +101,10 @@ they were. Then remove the launch option on Steam Deck.
 - **The installer says the archive differs from the original.** `data/resident.ark` was already
   modified by another mod, or it is a different game version. Restore the original file first.
 - **On Steam Deck nothing changes in the menus.** Check the launch option above.
+- **Steam version on Steam Deck: icons are there, but the menus ignore the gamepad.** Switch the
+  game to Proton Experimental (step 4 above).
+- **Every press in a menu moves two items.** Please open an issue and attach the log: the game
+  handles that gamepad by itself, and the fix did not recognise it.
 - The fix writes a log to `Documents\ss_xinput_fix.log` (on Proton: inside the game's prefix,
   `.../pfx/drive_c/users/steamuser/Documents/`).
 

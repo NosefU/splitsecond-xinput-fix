@@ -1,29 +1,17 @@
 **English** · [Русский](#русский)
 
-First release. Play the PC version of Split/Second with a gamepad only, on Windows or Steam Deck.
+- **The Steam version is supported.** The installer recognises both the boxed and the Steam `SplitSecond.exe`; the button icons work in both.
+- **Steam version on Steam Deck:** force **Proton Experimental** in the game's Properties → Compatibility. It has Valve's fix for this game that makes the controller look like an Xbox 360 pad, and the game then handles the menus by itself. With Proton 11.0 the menus do not react to the gamepad.
+- **Xbox 360 pads:** the game navigates its menus with them by itself, so the fix now switches its own menu navigation off when such a pad is attached. Before, every press could move two items.
 
-- All menus work with the gamepad: main menu, pause, results, options.
-- Xbox button icons instead of keyboard keys in the menu button bar, on the title screen and in race tutorial hints.
-- Driving is unchanged: sticks and triggers stay analog.
-- On the first start the controls are set to a ready-to-play gamepad layout.
-- One-file installers for Windows and Linux / Steam Deck; the game files are restored byte for byte on uninstall.
-
-**Downloads:** `…-windows.zip` for Windows, `…-linux.tar.gz` for Steam Deck / Linux.
-
-Requires the PC release with `SplitSecond.exe` build timestamp `4BE3EA74` and the original `data/resident.ark`. On Steam Deck add `WINEDLLOVERRIDES="xinput1_3=n,b" %command%` to the launch options. Installation steps are in `INSTALL.txt` inside the archive and in the [README](README.md).
+**Downloads:** `…-windows.zip` for Windows, `…-linux.tar.gz` for Steam Deck / Linux. To update, run the new installer over the old one. Installation steps are in `INSTALL.txt` inside the archive and in the [README](README.md).
 
 ---
 
 ### Русский
 
-Первый релиз. Позволяет играть в PC-версию Split/Second только геймпадом — на Windows или Steam Deck.
+- **Поддерживается Steam-версия.** Установщик распознаёт и коробочный, и Steam-овский `SplitSecond.exe`, иконки кнопок работают в обоих.
+- **Steam-версия на Steam Deck:** включите в свойствах игры → «Совместимость» принудительно **Proton Experimental**. В нём есть правка Valve для этой игры: геймпад выдаётся за Xbox 360, и игра сама управляет меню. С Proton 11.0 меню на геймпад не реагируют.
+- **Геймпады Xbox 360:** с ними игра сама управляет меню, поэтому фикс теперь отключает свою навигацию по меню, если такой геймпад подключён. Раньше одно нажатие могло сдвинуть курсор на два пункта.
 
-- Все меню управляются геймпадом: главное меню, пауза, результаты, настройки.
-- Иконки кнопок Xbox вместо клавиш: в строке подсказок меню, на заставке и в обучающих подсказках в гонке.
-- Управление в гонке не меняется: стики и курки остаются аналоговыми.
-- При первом запуске управление выставляется на готовую раскладку для геймпада.
-- Установщики одним файлом для Windows и Linux / Steam Deck; при удалении файлы игры восстанавливаются байт в байт.
-
-**Скачать:** `…-windows.zip` для Windows, `…-linux.tar.gz` для Steam Deck / Linux.
-
-Нужна PC-версия с `SplitSecond.exe` с меткой сборки `4BE3EA74` и оригинальный `data/resident.ark`. На Steam Deck добавьте в параметры запуска `WINEDLLOVERRIDES="xinput1_3=n,b" %command%`. Порядок установки — в `INSTALL.txt` внутри архива и в [README](README.ru.md).
+**Скачать:** `…-windows.zip` для Windows, `…-linux.tar.gz` для Steam Deck / Linux. Чтобы обновиться, запустите новый установщик поверх старого. Порядок установки — в `INSTALL.txt` внутри архива и в [README](README.ru.md).

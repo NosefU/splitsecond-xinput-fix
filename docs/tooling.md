@@ -18,7 +18,8 @@ needs Java and [JPEXS FFDec](https://github.com/jindrapetrik/jpexs-decompiler).
 | `tools/padicons.py` | build `Prompt_Bar.gfx` with Xbox icons |
 | `tools/pressstart.py` | prepare `FE_pressStart_Overlay.gfx` (A button clip, text field name) |
 | `tools/memscan.py` | parse memory snapshots from the research build (`ss_mem.bin`) |
-| `tools/ssdis.py` | helpers for disassembling the decrypted exe dump (`ss_dump.bin`) |
+| `tools/ssdis.py` | helpers for disassembling the decrypted exe dump (`ss_dump_<timestamp>.bin`) |
+| `tools/port_addrs.py` | find the addresses of one exe build in another, from two dumps |
 
 ## `.ark` format
 
@@ -55,6 +56,8 @@ With `-DDIAG` the proxy also writes to `Documents`:
 - `ss_mem.bin` — snapshots of the exe's `.data`/`Sdata` sections every 0.5 s (as deltas);
   `tools/memscan.py` turns them into arrays for finding state variables (this is how the menu and
   pause flags were found);
-- `ss_dump.bin` — the exe image from memory at the first race start (the code is already decrypted
-  by SecuROM), for disassembly with `tools/ssdis.py`;
+- `ss_dump_<timestamp>.bin` — the exe image from memory, once: a minute after start or at the
+  first race start, whichever comes first (the code is already decrypted by SecuROM by then), for
+  disassembly with `tools/ssdis.py`. With an unsupported exe the dump is still written, a minute
+  after start, so a new build can be ported with `tools/port_addrs.py`;
 - to the log — key presses, gamepad activity and the control bindings from the game's profiles.

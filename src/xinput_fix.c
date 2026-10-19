@@ -17,7 +17,8 @@
  * 3. Controls reset after installation (see "Controls reset").
  *
  * The game navigates menus with the gamepad by itself when it recognises an
- * Xbox 360 pad; then the proxy sends no keys (see "Native pad support").
+ * Xbox 360 pad; then the proxy sends no keys. Without an XInput pad it reads
+ * the pad through DirectInput (see "DirectInput").
  *
  * Addresses are known for two builds of SplitSecond.exe (see `builds`): the
  * retail/disc one and the Steam one; with any other exe the proxy only
@@ -504,30 +505,67 @@ static void diag_log_bindings(void)
 }
 #endif
 
-/* ---- Native pad support ----
+/* ---- DirectInput: Xbox 360 detection and fallback pad ----
  * The game classifies DirectInput devices by guidProduct (function at 0x40db10
  * in the retail build): Xbox 360 pads (wired 045e:028e, wireless receiver
  * 045e:02a1) get type 0, and with them the game navigates its menus and pauses
  * by itself. Key emulation on top of that would double every press, so it is
- * switched off while such a pad is attached. */
+ * switched off while such a pad is attached.
+ *
+ * Some setups expose the pad to DirectInput only (the Steam version under
+ * Proton 11 reports no XInput devices at all), so when XInput has no pad the
+ * first DirectInput game controller is read instead, with the Xbox layout the
+ * game itself assumes: buttons A B X Y LB RB Back Start, POV hat as the d-pad. */
 static const GUID iid_directinput8a = { 0xbf798030, 0x483a, 0x4da2, { 0xaa, 0x99, 0x5d, 0x64, 0xed, 0x36, 0x97, 0x00 } };
+static IDirectInput8A *di;
+static IDirectInputDevice8A *di_pad;
+static GUID di_pad_guid;
 
-static BOOL CALLBACK native_pad_cb(LPCDIDEVICEINSTANCEA dev, void *found)
+/* Own data format (c_dfDIJoystick would pull in dxguid): stick X/Y, hat, 8 buttons. */
+typedef struct { LONG x, y; DWORD pov; BYTE buttons[8]; } di_state;
+static const GUID guid_x_axis = { 0xa36d02e0, 0xc9f3, 0x11cf, { 0xbf, 0xc7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00 } };
+static const GUID guid_y_axis = { 0xa36d02e1, 0xc9f3, 0x11cf, { 0xbf, 0xc7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00 } };
+static const GUID guid_pov    = { 0xa36d02f2, 0xc9f3, 0x11cf, { 0xbf, 0xc7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00 } };
+#define DI_BUTTON(n) { NULL, 12 + (n), DIDFT_BUTTON | DIDFT_ANYINSTANCE | DIDFT_OPTIONAL, 0 }
+static DIOBJECTDATAFORMAT di_objects[] = {
+    { &guid_x_axis, 0, DIDFT_AXIS | DIDFT_ANYINSTANCE | DIDFT_OPTIONAL, DIDOI_ASPECTPOSITION },
+    { &guid_y_axis, 4, DIDFT_AXIS | DIDFT_ANYINSTANCE | DIDFT_OPTIONAL, DIDOI_ASPECTPOSITION },
+    { &guid_pov, 8, DIDFT_POV | DIDFT_ANYINSTANCE | DIDFT_OPTIONAL, 0 },
+    DI_BUTTON(0), DI_BUTTON(1), DI_BUTTON(2), DI_BUTTON(3), DI_BUTTON(4), DI_BUTTON(5), DI_BUTTON(6), DI_BUTTON(7),
+};
+static DIDATAFORMAT di_format = {
+    sizeof(DIDATAFORMAT), sizeof(DIOBJECTDATAFORMAT), DIDF_ABSAXIS, sizeof(di_state),
+    sizeof(di_objects) / sizeof(*di_objects), di_objects,
+};
+
+typedef struct { BOOL native, found; GUID first; } enum_result;
+
+static BOOL CALLBACK di_enum_cb(LPCDIDEVICEINSTANCEA dev, void *arg)
 {
+    enum_result *r = arg;
     DWORD product = dev->guidProduct.Data1;  /* MAKELONG(VID, PID) */
-    if (product == 0x028e045e || product == 0x02a1045e)
+    if (product == 0x028e045e || product == 0x02a1045e) r->native = TRUE;
+    if (!r->found)
     {
-        *(BOOL *)found = TRUE;
-        return DIENUM_STOP;
+        r->found = TRUE;
+        r->first = dev->guidInstance;
     }
     return DIENUM_CONTINUE;
 }
 
-static BOOL native_pad_attached(void)
+static void di_release_pad(void)
 {
-    static IDirectInput8A *di;
+    if (!di_pad) return;
+    IDirectInputDevice8_Unacquire(di_pad);
+    IDirectInputDevice8_Release(di_pad);
+    di_pad = NULL;
+}
+
+/* Re-enumerates game controllers; returns TRUE if an Xbox 360 pad is attached. */
+static BOOL di_refresh(void)
+{
     static BOOL tried;
-    BOOL found = FALSE;
+    enum_result r = {0};
     if (!tried)
     {
         HMODULE lib = LoadLibraryA("dinput8.dll");
@@ -537,11 +575,55 @@ static BOOL native_pad_attached(void)
         if (!create || FAILED(create(GetModuleHandleA(NULL), DIRECTINPUT_VERSION, &iid_directinput8a, (void **)&di, NULL)))
         {
             di = NULL;
-            logmsg("DirectInput unavailable, Xbox 360 pad detection disabled");
+            logmsg("DirectInput unavailable");
         }
     }
-    if (di) IDirectInput8_EnumDevices(di, DI8DEVCLASS_GAMECTRL, native_pad_cb, &found, DIEDFL_ATTACHEDONLY);
-    return found;
+    if (!di) return FALSE;
+    IDirectInput8_EnumDevices(di, DI8DEVCLASS_GAMECTRL, di_enum_cb, &r, DIEDFL_ATTACHEDONLY);
+    if (!r.found || (di_pad && memcmp(&r.first, &di_pad_guid, sizeof(GUID))))
+        di_release_pad();
+    if (r.found && !di_pad && SUCCEEDED(IDirectInput8_CreateDevice(di, &r.first, &di_pad, NULL)))
+    {
+        DIPROPRANGE range = { { sizeof(DIPROPRANGE), sizeof(DIPROPHEADER), 0, DIPH_BYOFFSET }, -32768, 32767 };
+        if (FAILED(IDirectInputDevice8_SetDataFormat(di_pad, &di_format)))
+        {
+            di_release_pad();
+            return r.native;
+        }
+        range.diph.dwObj = 0;  /* offsets in di_state */
+        IDirectInputDevice8_SetProperty(di_pad, DIPROP_RANGE, &range.diph);
+        range.diph.dwObj = 4;
+        IDirectInputDevice8_SetProperty(di_pad, DIPROP_RANGE, &range.diph);
+        di_pad_guid = r.first;
+    }
+    return r.native;
+}
+
+/* Reads the DirectInput pad as an XInput state; FALSE if there is none. */
+static BOOL di_read(XGAMEPAD *pad)
+{
+    static const WORD buttons[8] = { XB_A, XB_B, XB_X, XB_Y, 0x0100, 0x0200, 0x0020, XB_START };
+    static const WORD pov[8] = {
+        XB_DPAD_UP, XB_DPAD_UP | XB_DPAD_RIGHT, XB_DPAD_RIGHT, XB_DPAD_RIGHT | XB_DPAD_DOWN,
+        XB_DPAD_DOWN, XB_DPAD_DOWN | XB_DPAD_LEFT, XB_DPAD_LEFT, XB_DPAD_LEFT | XB_DPAD_UP,
+    };
+    di_state js;
+    int i;
+    if (!di_pad) return FALSE;
+    IDirectInputDevice8_Poll(di_pad);
+    if (FAILED(IDirectInputDevice8_GetDeviceState(di_pad, sizeof(js), &js)))
+    {
+        if (FAILED(IDirectInputDevice8_Acquire(di_pad))) return FALSE;
+        IDirectInputDevice8_Poll(di_pad);
+        if (FAILED(IDirectInputDevice8_GetDeviceState(di_pad, sizeof(js), &js))) return FALSE;
+    }
+    ZeroMemory(pad, sizeof(*pad));
+    for (i = 0; i < 8; i++)
+        if (js.buttons[i] & 0x80) pad->wButtons |= buttons[i];
+    if (LOWORD(js.pov) != 0xffff) pad->wButtons |= pov[(js.pov + 2250) / 4500 % 8];
+    pad->sThumbLX = (SHORT)js.x;
+    pad->sThumbLY = (SHORT)(js.y == -32768 ? 32767 : -js.y);  /* DirectInput Y grows downwards */
+    return TRUE;
 }
 
 static BOOL in_menu(void)
@@ -582,7 +664,7 @@ static void read_inputs(const XGAMEPAD *pad, const BOOL *prev, BOOL *cur)
 static DWORD WINAPI pad_thread(void *arg)
 {
     BOOL prev[IN_COUNT] = {0}, armed[IN_COUNT] = {0}, menu_prev = FALSE, hooked = FALSE, resetting;
-    BOOL native = FALSE;
+    BOOL native = FALSE, pad_via_dinput = FALSE;
     DWORD next_reset = 0, next_native_check = 0;
     DWORD next_repeat[IN_COUNT] = {0};
     int i;
@@ -629,7 +711,7 @@ static DWORD WINAPI pad_thread(void *arg)
         }
         if ((LONG)(now - next_native_check) >= 0)
         {
-            BOOL n = native_pad_attached();
+            BOOL n = di_refresh();
             if (n != native) logmsg(n ? "Xbox 360 pad attached: the game handles menus itself, key emulation off"
                                       : "no Xbox 360 pad: key emulation on");
             native = n;
@@ -657,8 +739,15 @@ static DWORD WINAPI pad_thread(void *arg)
             }
         }
 #endif
-        if (native || ((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(0, &st) != ERROR_SUCCESS)
+        if (native)
             ZeroMemory(&st, sizeof(st));
+        else if (((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(0, &st) != ERROR_SUCCESS)
+        {
+            BOOL dinput = di_read(&st.Gamepad);
+            if (dinput != pad_via_dinput) logmsg(dinput ? "no XInput pad, reading the pad through DirectInput" : "DirectInput pad lost");
+            pad_via_dinput = dinput;
+            if (!dinput) ZeroMemory(&st, sizeof(st));
+        }
         read_inputs(&st.Gamepad, prev, cur);
 #ifdef DIAG
         {

@@ -575,8 +575,7 @@ int main(int argc, char **argv)
         printf("Installed.\n");
 #ifndef _WIN32
         printf("\nSteam Deck / Proton: add this to the game's launch options:\n"
-               "  WINEDLLOVERRIDES=\"xinput1_3=n,b\" %%command%%\n"
-               "Steam version: also force Proton Experimental (Properties -> Compatibility).\n");
+               "  WINEDLLOVERRIDES=\"xinput1_3=n,b\" %%command%%\n");
 #endif
     }
     pause_on_windows();

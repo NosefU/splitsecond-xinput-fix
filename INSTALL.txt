@@ -35,11 +35,8 @@ Steam Deck / Linux (Proton)
   3. В Steam: свойства игры -> Параметры запуска, добавьте:
          WINEDLLOVERRIDES="xinput1_3=n,b" %command%
      (без этого Proton не загрузит DLL из папки игры)
-  4. Только для Steam-версии: свойства игры -> Совместимость, включите
-     принудительно Proton Experimental. С Proton 11.0 меню не реагируют на
-     геймпад (иконки при этом работают).
-  5. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
-  6. Запустите игру. Управление один раз сбросится на раскладку фикса.
+  4. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
+  5. Запустите игру. Управление один раз сбросится на раскладку фикса.
 
 С геймпадом Xbox 360 игра сама управляет меню; фикс это замечает и только
 показывает иконки кнопок.
@@ -80,8 +77,6 @@ there (Dolphin: right-click -> Open Terminal Here) and run
 ./ssfix-install "/path/to/your/Split Second"). Then add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%
 to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
-Steam version: also force Proton Experimental in Properties -> Compatibility,
-otherwise the menus ignore the gamepad.
 
 On the first start the controls are reset once to the layout the fix expects.
 To uninstall, run "Uninstall gamepad fix.bat" (Windows) or

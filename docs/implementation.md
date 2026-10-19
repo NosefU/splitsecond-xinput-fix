@@ -51,8 +51,16 @@ controllers every 3 s and switches key emulation off while such a pad is attache
 
 On Steam Deck this is what Proton Experimental does for the Steam version (app 297860): it sets
 `PROTON_SPOOF_STEAMINPUT_VIDPID=1`, which gives the Steam Input virtual pad the Xbox 360 IDs.
-Proton 11.0 has no such fix yet, and there the Steam version does not see the pad through XInput at
-all, so the menus stay keyboard-only.
+
+### DirectInput fallback
+
+Under Proton 11.0 the Steam version sees no pad through XInput at all (all slots return
+`ERROR_DEVICE_NOT_CONNECTED`), while DirectInput — and so the game in races — sees it. When XInput
+slot 0 is empty, the proxy reads the first DirectInput game controller instead, with the layout
+the game assumes for an Xbox pad: buttons 0–7 are A, B, X, Y, LB, RB, Back, Start, the POV hat is
+the d-pad, the X/Y axes are the left stick. It uses its own small data format (stick, hat,
+8 buttons) instead of `c_dfDIJoystick`, which would pull in `dxguid`. Devices are re-enumerated
+every 3 s together with the Xbox 360 check.
 
 ### Menu and race detection
 

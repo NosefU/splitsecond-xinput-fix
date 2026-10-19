@@ -17,8 +17,11 @@ SplitSecond.exe и откажется работать с другой верс�
 
 Windows
   1. Скопируйте ssfix-install.exe в папку игры (рядом с SplitSecond.exe) и запустите.
+     Windows попросит права администратора. Если SmartScreen скажет, что
+     приложение не распознано: "Подробнее" -> "Выполнить в любом случае".
      Или запустите откуда угодно, передав папку игры:
          ssfix-install.exe "C:\Games\Split Second"
+     Steam-версия: C:\Program Files (x86)\Steam\steamapps\common\SplitSecond
   2. Запустите игру. Управление один раз сбросится на раскладку, под которую
      рассчитан фикс.
 
@@ -75,7 +78,8 @@ Works with the boxed and the Steam version of the game (the installer checks
 SplitSecond.exe). Needs the original, unmodified data/resident.ark.
 
 Windows: put ssfix-install.exe next to SplitSecond.exe and run it (or pass the
-game folder as an argument), then start the game.
+game folder as an argument), allow administrator rights, then start the game.
+The Steam version is in C:\Program Files (x86)\Steam\steamapps\common\SplitSecond.
 
 Steam Deck / Linux: unpack anywhere, open a terminal there (Dolphin:
 right-click -> Open Terminal Here) and run

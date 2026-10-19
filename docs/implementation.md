@@ -199,6 +199,13 @@ copy with the build and the state of the fix — not installed, installed (this 
 byte for byte the embedded one, or another version), needs reinstalling (the DLL is there but the
 archive is not patched, e.g. after Steam replaced it), unsupported — and asks what to do.
 
+On Windows the installer has a manifest asking for administrator rights (`installer/ssfix_install.manifest`):
+the game usually lives under `Program Files`. The uninstall script starts it with `start`, which
+goes through ShellExecute and so shows the UAC prompt; the installer then deletes the script and
+schedules its own copy in `ssfix\` for removal on reboot. The game itself runs without admin
+rights, so the DLL may not be able to delete the controls reset marker; it then records the
+handled marker (path and time) in `Documents\ss_xinput_fix_reset.txt` and does not reset again.
+
 Running it again first rolls back the previous installation, so the archive does not grow.
 Uninstall restores the table records, truncates the archive to its original size (it then matches
 the original byte for byte) and removes the DLL (restoring a `.bak`), the marker, the script,

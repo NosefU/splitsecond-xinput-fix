@@ -1,5 +1,6 @@
 CC_WIN32 ?= i686-w64-mingw32-gcc
 CC_LINUX ?= cc
+WINDRES  ?= i686-w64-mingw32-windres
 PYTHON   ?= python3
 CFLAGS   ?= -O2 -Wall
 DLLFLAGS  = -shared -static-libgcc -Wl,--enable-stdcall-fixup -Wl,--kill-at
@@ -40,9 +41,13 @@ $(BUILD)/payload/payload.h: $(BUILD)/xinput1_3.dll $(DIFFS) tools/embed.py $(BUI
 	@mkdir -p $(dir $@)
 	$(PYTHON) tools/embed.py $(VERSION) $(BUILD)/xinput1_3.dll $@ $(DIFFS)
 
-$(BUILD)/win/ssfix-install.exe: installer/ssfix_install.c $(BUILD)/payload/payload.h
+$(BUILD)/win/manifest.o: installer/ssfix_install.rc installer/ssfix_install.manifest
 	@mkdir -p $(dir $@)
-	$(CC_WIN32) $(CFLAGS) -std=c99 -static -s -I$(BUILD)/payload -o $@ $<
+	$(WINDRES) -I installer -o $@ $<
+
+$(BUILD)/win/ssfix-install.exe: installer/ssfix_install.c $(BUILD)/payload/payload.h $(BUILD)/win/manifest.o
+	@mkdir -p $(dir $@)
+	$(CC_WIN32) $(CFLAGS) -std=c99 -static -s -I$(BUILD)/payload -o $@ $< $(BUILD)/win/manifest.o
 
 $(BUILD)/linux/ssfix-install: installer/ssfix_install.c $(BUILD)/payload/payload.h
 	@mkdir -p $(dir $@)

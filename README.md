@@ -42,8 +42,12 @@ Steam Deck / Linux. Each contains a single installer with everything the fix nee
 ### Windows
 
 1. Copy `ssfix-install.exe` into the game folder (next to `SplitSecond.exe`) and run it.
+   Windows asks for administrator rights: the game folder is usually under `Program Files`. If
+   SmartScreen says the app is unrecognised, click **More info → Run anyway**.
    You can also run it from anywhere with the game folder as an argument:
    `ssfix-install.exe "C:\Games\Split Second"`.
+   The Steam version is in `C:\Program Files (x86)\Steam\steamapps\common\SplitSecond` (or in
+   another Steam library folder).
 2. Start the game.
 
 No DirectX installation is needed for the fix itself.
@@ -112,7 +116,8 @@ in the game's options afterwards; your changes are kept.
 
 Run **`Uninstall gamepad fix.bat`** (Windows) or **`uninstall-gamepad-fix.sh`** (Linux / Steam
 Deck) in the game folder — the installer puts it there. The game files are restored exactly as
-they were. If you added the launch option by hand, remove it too.
+they were. If you added the launch option by hand, remove it too. On Windows the uninstaller's own
+copy in `ssfix\` is removed on the next reboot (a running program cannot delete itself).
 
 ## Steam updates and language changes
 

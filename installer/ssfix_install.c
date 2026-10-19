@@ -84,12 +84,14 @@ static const struct { uint32_t timestamp, image_size; const char *name; } exe_bu
 #define MAX_PATCHES     8
 
 static char game_dir[4096];
-static int from_script;  /* run by the uninstall script, which pauses and cleans up itself */
+static int from_script;  /* --from-script: given by uninstall scripts; kept for older ones */
 
+/* On Windows the installer usually runs in its own console window (it asks for
+ * admin rights, so even the uninstall script starts it in a new one): keep it
+ * open until the output is read. */
 static void pause_on_windows(void)
 {
 #ifdef _WIN32
-    if (from_script) return;
     printf("\nPress Enter to close.");
     fflush(stdout);
     getchar();
@@ -465,13 +467,10 @@ static void remove_dll(void)
 
 static const char uninstall_script[] =
 #ifdef _WIN32
-    "@echo off\r\n"
-    "rem Removes the Split/Second gamepad fix from this folder.\r\n"
-    "\"%~dp0ssfix\\" SELF_NAME "\" --uninstall --from-script \"%~dp0.\"\r\n"
-    "if errorlevel 1 (pause & exit /b 1)\r\n"
-    "rmdir /s /q \"%~dp0ssfix\" 2>nul\r\n"
-    "pause\r\n"
-    "(goto) 2>nul & del \"%~f0\"\r\n";
+    /* "start" goes through ShellExecute, so Windows asks for admin rights
+     * (cmd itself cannot start a program that requires them). The installer
+     * runs in its own window and deletes this script. */
+    "@start \"\" \"%~dp0ssfix\\" SELF_NAME "\" --uninstall --from-script \"%~dp0.\"\r\n";
 #else
     "#!/bin/sh\n"
     "# Removes the Split/Second gamepad fix from this folder.\n"
@@ -517,12 +516,20 @@ static void install_uninstaller(void)
 static void remove_uninstaller(void)
 {
     char dir[4200], copy[4200], script[4200];
-    if (from_script) return;  /* the script removes itself and ssfix/ */
     path_join(dir, sizeof(dir), "ssfix");
     path_join(copy, sizeof(copy), "ssfix/" SELF_NAME);
     path_join(script, sizeof(script), UNINSTALL_SCRIPT);
     remove(script);
-    remove(copy);  /* fails on Windows if this is the running copy; harmless */
+    if (remove(copy) && file_exists("ssfix/" SELF_NAME))
+    {
+#ifdef _WIN32
+        /* this is the running copy (started by the uninstall script): remove it on the next reboot */
+        MoveFileExA(copy, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+        MoveFileExA(dir, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+        printf("  ssfix\\%s will be removed on the next reboot\n", SELF_NAME);
+#endif
+        return;
+    }
     remove_dir(dir);
 }
 

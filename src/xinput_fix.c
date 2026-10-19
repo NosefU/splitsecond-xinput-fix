@@ -408,7 +408,7 @@ static const int reset_keyboard[RESET_SLOTS][4] = {
     { 0, 0, 3, 0 },
 };
 
-static char reset_marker[MAX_PATH], save_dir[MAX_PATH];
+static char reset_marker[MAX_PATH], save_dir[MAX_PATH], reset_note[MAX_PATH + 32], reset_id[MAX_PATH + 32];
 static ULONGLONG reset_done_at;  /* newest save time when the layout was last written */
 
 static ULONGLONG newest_save_time(void)
@@ -428,14 +428,32 @@ static ULONGLONG newest_save_time(void)
     return newest;
 }
 
+/* The game may not be allowed to delete the marker (Program Files without
+ * admin rights). Then a note in Documents records which marker (path and
+ * time) has been handled, so the reset is not repeated on every start. */
+static BOOL reset_noted(void)
+{
+    char buf[sizeof(reset_id)] = "";
+    FILE *f = fopen(reset_note, "r");
+    if (!f) return FALSE;
+    if (!fgets(buf, sizeof(buf), f)) buf[0] = 0;
+    fclose(f);
+    return !strcmp(buf, reset_id);
+}
+
 static BOOL reset_init(void)
 {
     char *slash;
+    WIN32_FILE_ATTRIBUTE_DATA attr;
     GetModuleFileNameA(NULL, reset_marker, sizeof(reset_marker));
     if (!(slash = strrchr(reset_marker, '\\'))) return FALSE;
     lstrcpyA(slash + 1, "ssfix_reset_controls");
-    if (GetFileAttributesA(reset_marker) == INVALID_FILE_ATTRIBUTES) return FALSE;
+    if (!GetFileAttributesExA(reset_marker, GetFileExInfoStandard, &attr)) return FALSE;
     if (SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, save_dir) != S_OK) return FALSE;
+    snprintf(reset_note, sizeof(reset_note), "%s\\ss_xinput_fix_reset.txt", save_dir);
+    snprintf(reset_id, sizeof(reset_id), "%s %08lx%08lx", reset_marker,
+             attr.ftLastWriteTime.dwHighDateTime, attr.ftLastWriteTime.dwLowDateTime);
+    if (reset_noted()) return FALSE;
     lstrcatA(save_dir, "\\Disney Interactive Studios\\Split Second");
     logmsg("controls reset pending");
     return TRUE;
@@ -484,7 +502,17 @@ static BOOL reset_step(void)
     }
     if (newest_save_time() >= reset_done_at)
     {
-        DeleteFileA(reset_marker);
+        if (!DeleteFileA(reset_marker))
+        {
+            DWORD err = GetLastError();
+            FILE *f = fopen(reset_note, "w");
+            if (f)
+            {
+                fputs(reset_id, f);
+                fclose(f);
+            }
+            logmsg("cannot delete %s (error %lu), noted the reset as done", reset_marker, err);
+        }
         logmsg("controls saved, reset finished");
         return FALSE;
     }

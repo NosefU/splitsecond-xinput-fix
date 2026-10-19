@@ -3,7 +3,7 @@
  *   ssfix-install [--uninstall] [game folder]
  *
  * Install:
- *   - checks SplitSecond.exe is the supported version;
+ *   - checks SplitSecond.exe is a supported build (retail or Steam);
  *   - patches two UI movies inside data/resident.ark: each original entry is
  *     unpacked, checked against the CRC the diff was made for, the SSDF diff is
  *     applied and the result is appended to the archive; only the entry's
@@ -11,8 +11,9 @@
  *     saved first to data/resident.ark.ssfix, so uninstall restores the archive
  *     byte for byte;
  *   - writes xinput1_3.dll next to the exe (an existing different one is kept
- *     as xinput1_3.dll.bak) and the ssfix_reset_controls marker, which makes
- *     the DLL reset the controls to the layout the fix expects;
+ *     as xinput1_3.dll.bak) and, on the first installation (not on an update),
+ *     the ssfix_reset_controls marker, which makes the DLL reset the controls
+ *     to the layout the fix expects;
  *   - copies itself to ssfix/ in the game folder and writes an uninstall
  *     script next to the exe ("Uninstall gamepad fix.bat" on Windows,
  *     uninstall-gamepad-fix.sh on Linux).
@@ -66,8 +67,11 @@ static int same_file(const char *a, const char *b)
 
 #include "payload.h"  /* generated: payload_dll, payload_diffs */
 
-#define EXE_TIMESTAMP   0x4be3ea74u
-#define EXE_IMAGESIZE   0x1a64000u
+/* Supported SplitSecond.exe builds: retail (disc) and Steam. */
+static const struct { uint32_t timestamp, image_size; const char *name; } exe_builds[] = {
+    { 0x4be3ea74u, 0x1a64000u, "retail" },
+    { 0x4be13c66u, 0x1db7000u, "Steam" },
+};
 #define ARK_VERSION     0x10000u
 #define ARK_TABLE       0x18
 #define ARK_RECORD      20
@@ -393,7 +397,8 @@ static void install_dll(void)
     FILE *f;
     path_join(path, sizeof(path), "xinput1_3.dll");
     snprintf(bak, sizeof(bak), "%s.bak", path);
-    if (file_exists("xinput1_3.dll") && !is_our_dll(path) && !file_exists("xinput1_3.dll.bak"))
+    int update = file_exists("xinput1_3.dll") && is_our_dll(path);
+    if (file_exists("xinput1_3.dll") && !update && !file_exists("xinput1_3.dll.bak"))
     {
         if (rename(path, bak)) fail("cannot rename %s: %s", path, strerror(errno));
         printf("  kept the previous xinput1_3.dll as xinput1_3.dll.bak\n");
@@ -401,6 +406,11 @@ static void install_dll(void)
     if (!(f = fopen(path, "wb")) || fwrite(payload_dll, 1, payload_dll_size, f) != payload_dll_size || fclose(f))
         fail("cannot write %s: %s", path, strerror(errno));
     printf("  installed xinput1_3.dll\n");
+    if (update)
+    {
+        printf("  updated over a previous version: the controls are kept\n");
+        return;
+    }
     path_join(path, sizeof(path), "ssfix_reset_controls");
     if (!(f = fopen(path, "wb")) || fclose(f)) fail("cannot write %s: %s", path, strerror(errno));
     printf("  controls will be reset to the gamepad layout on the next start\n");
@@ -491,7 +501,7 @@ static void remove_uninstaller(void)
 static void check_exe(void)
 {
     char path[4200];
-    uint8_t buf[0x2000];  /* the SecuROM build has a long DOS stub: PE header at 0xd40 */
+    uint8_t buf[0x2000];  /* the SecuROM builds have a long DOS stub: PE header at 0xd20-0xd40 */
     FILE *f;
     path_join(path, sizeof(path), "SplitSecond.exe");
     if (!(f = fopen(path, "rb"))) fail("SplitSecond.exe not found in %s", game_dir);
@@ -499,8 +509,13 @@ static void check_exe(void)
     fclose(f);
     uint32_t pe = rd32(buf + 0x3c);
     if (pe > sizeof(buf) - 0x60 || memcmp(buf + pe, "PE\0\0", 4)) fail("SplitSecond.exe is not a valid exe");
-    if (rd32(buf + pe + 8) != EXE_TIMESTAMP || rd32(buf + pe + 24 + 56) != EXE_IMAGESIZE)
-        fail("this SplitSecond.exe version is not supported (need the build with timestamp %08x)", EXE_TIMESTAMP);
+    for (size_t i = 0; i < sizeof(exe_builds) / sizeof(*exe_builds); i++)
+        if (rd32(buf + pe + 8) == exe_builds[i].timestamp && rd32(buf + pe + 24 + 56) == exe_builds[i].image_size)
+        {
+            printf("SplitSecond.exe: %s version\n", exe_builds[i].name);
+            return;
+        }
+    fail("this SplitSecond.exe version is not supported (timestamp %08x)", rd32(buf + pe + 8));
 }
 
 static void find_game_dir(const char *arg, const char *argv0)
@@ -560,7 +575,8 @@ int main(int argc, char **argv)
         printf("Installed.\n");
 #ifndef _WIN32
         printf("\nSteam Deck / Proton: add this to the game's launch options:\n"
-               "  WINEDLLOVERRIDES=\"xinput1_3=n,b\" %%command%%\n");
+               "  WINEDLLOVERRIDES=\"xinput1_3=n,b\" %%command%%\n"
+               "Steam version: also force Proton Experimental (Properties -> Compatibility).\n");
 #endif
     }
     pause_on_windows();

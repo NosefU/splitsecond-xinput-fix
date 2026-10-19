@@ -3,7 +3,7 @@ import re, struct, sys
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 
 B = 0x400000
-d = open(sys.argv[1] if len(sys.argv) > 1 else 'ss_dump.bin', 'rb').read()
+d = open(sys.argv[1] if len(sys.argv) > 1 else 'ss_dump_4be3ea74.bin', 'rb').read()
 cs = Cs(CS_ARCH_X86, CS_MODE_32)
 TEXT_END = 0x79c000 + B
 

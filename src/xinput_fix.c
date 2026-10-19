@@ -8,19 +8,26 @@
  * 1. Menu navigation: a thread that, while the game is in a menu (front-end,
  *    pause, results), turns gamepad buttons into key presses. During driving
  *    it does nothing (except Start -> Esc for pause), so sticks and triggers
- *    stay analog. Menu detection uses two globals in SplitSecond.exe .data:
+ *    stay analog. Menu detection uses two globals in SplitSecond.exe .data
+ *    (addresses for the retail build):
  *      [0xd4456c] == 0  -> not in a race (front-end)
  *      [0xd8c104] != 0  -> race paused / results
  * 2. HUD hints: a hook on the function that expands *ACTION_...* tokens in
  *    messages, so they show the gamepad button icon (see below).
  * 3. Controls reset after installation (see "Controls reset").
  *
- * Addresses are for SplitSecond.exe with TimeDateStamp 0x4be3ea74 and
- * SizeOfImage 0x1a64000; with any other exe the proxy only forwards XInput.
+ * The game navigates menus with the gamepad by itself when it recognises an
+ * Xbox 360 pad; then the proxy sends no keys (see "Native pad support").
+ *
+ * Addresses are known for two builds of SplitSecond.exe (see `builds`): the
+ * retail/disc one and the Steam one; with any other exe the proxy only
+ * forwards XInput.
  * Build with -DDIAG for the research build (memory snapshots, image dump).
  *
  * Log: %USERPROFILE%\Documents\ss_xinput_fix.log */
 #include <windows.h>
+#define DIRECTINPUT_VERSION 0x0800
+#include <dinput.h>
 #include <shlobj.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,10 +35,29 @@
 /* Lets the installer recognise this DLL, whatever its version. */
 __attribute__((used)) static const char ssfix_marker[] = "SSFIX-XINPUT-PROXY";
 
-#define EXPECTED_TIMESTAMP  0x4be3ea74
-#define EXPECTED_IMAGESIZE  0x1a64000
-#define ADDR_IN_RACE        0xd4456c
-#define ADDR_RACE_PAUSED    0xd8c104
+/* Per-build addresses. The Steam build has the same code, moved by a few
+ * hundred bytes; its .data is 0x1000 lower. */
+typedef struct {
+    const char *name;
+    DWORD timestamp, image_size;
+    DWORD in_race, race_paused;
+    DWORD expand_action, string_assign, input_profiles;
+    BYTE expand_prologue[7], expand_marker[5];
+    DWORD diag_regions[2][2];  /* .data and Sdata: start, size */
+} build_t;
+
+static const build_t builds[] = {
+    { "retail", 0x4be3ea74, 0x1a64000, 0xd4456c, 0xd8c104, 0x562350, 0xa16250, 0xd656c8,
+      { 0x6a, 0xff, 0x68, 0x48, 0x6b, 0xb3, 0x00 }, { 0xbf, 0xa0, 0x0c, 0xbd, 0x00 },
+      { { 0xcf6000, 0xa8000 }, { 0x1a56000, 0x2d4000 } } },
+    { "steam", 0x4be13c66, 0x1db7000, 0xd4356c, 0xd8b104, 0x561f00, 0xa15bf0, 0xd646c8,
+      { 0x6a, 0xff, 0x68, 0x28, 0x60, 0xb3, 0x00 }, { 0xbf, 0x50, 0xfc, 0xbc, 0x00 },
+      { { 0xcf5000, 0xa8000 }, { 0x1cc3000, 0x344000 } } },
+};
+static const build_t *game;
+
+#define ADDR_IN_RACE        (game->in_race)
+#define ADDR_RACE_PAUSED    (game->race_paused)
 
 #define REPEAT_DELAY_MS     400
 #define REPEAT_INTERVAL_MS  90
@@ -119,19 +145,24 @@ static BOOL exe_matches(void)
     BYTE *base = (BYTE *)GetModuleHandleA(NULL);
     IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
     IMAGE_NT_HEADERS32 *nt = (IMAGE_NT_HEADERS32 *)(base + dos->e_lfanew);
+    unsigned i;
     logmsg("exe base %p timestamp %08lx image size %08lx", base, nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage);
-    return base == (BYTE *)0x400000
-        && nt->FileHeader.TimeDateStamp == EXPECTED_TIMESTAMP
-        && nt->OptionalHeader.SizeOfImage == EXPECTED_IMAGESIZE;
+    if (base != (BYTE *)0x400000) return FALSE;
+    for (i = 0; i < sizeof(builds) / sizeof(*builds); i++)
+        if (nt->FileHeader.TimeDateStamp == builds[i].timestamp && nt->OptionalHeader.SizeOfImage == builds[i].image_size)
+        {
+            game = &builds[i];
+            logmsg("%s build", game->name);
+            return TRUE;
+        }
+    return FALSE;
 }
 
 #ifdef DIAG
 #include <stdlib.h>
 /* Delta snapshots of the exe's .data and Sdata, every 0.5 s, to ss_mem.bin. */
 static FILE *memf;
-static struct { DWORD start, size; BYTE *prev; } regions[2] = {
-    { 0xcf6000, 0xa8000 }, { 0x1a56000, 0x2d4000 },
-};
+static struct { DWORD start, size; BYTE *prev; } regions[2];
 
 static void diag_snapshot(DWORD index, double t)
 {
@@ -151,14 +182,31 @@ static void diag_snapshot(DWORD index, double t)
     {
         DWORD *c = (DWORD *)regions[i].start, *p, n, count = 0;
         long count_pos;
-        if (!regions[i].prev) regions[i].prev = calloc(1, regions[i].size);
+        if (!regions[i].prev)
+        {
+            regions[i].start = game->diag_regions[i][0];
+            regions[i].size = game->diag_regions[i][1];
+            regions[i].prev = calloc(1, regions[i].size);
+        }
         p = (DWORD *)regions[i].prev;
         fwrite(&regions[i].start, 4, 1, memf);
         count_pos = ftell(memf);
         fwrite(&count, 4, 1, memf);
         for (n = 0; n < regions[i].size / 4; n++)
         {
-            DWORD v = c[n];
+            DWORD v;
+            if (!(n & 0x3ff))
+            {
+                /* Skip pages that are not readable (yet). */
+                MEMORY_BASIC_INFORMATION mbi;
+                if (!VirtualQuery(c + n, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT
+                    || (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
+                {
+                    n += 0x3ff;
+                    continue;
+                }
+            }
+            v = c[n];
             if (index == 0 || v != p[n])
             {
                 DWORD off = n * 4;
@@ -175,20 +223,21 @@ static void diag_snapshot(DWORD index, double t)
     fflush(memf);
 }
 
-/* Write the whole in-memory exe image (decrypted by SecuROM) to ss_dump.bin, once. */
+/* Write the whole in-memory exe image (decrypted by SecuROM) to ss_dump_<timestamp>.bin, once. */
 static void diag_dump_image(void)
 {
     static BOOL done;
     BYTE *base = (BYTE *)GetModuleHandleA(NULL), *zero;
     IMAGE_NT_HEADERS32 *nt = (IMAGE_NT_HEADERS32 *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
     DWORD size = nt->OptionalHeader.SizeOfImage, off, readable = 0;
-    char path[MAX_PATH];
+    char path[MAX_PATH], name[40];
     FILE *f;
 
     if (done) return;
     done = TRUE;
     if (!GetEnvironmentVariableA("USERPROFILE", path, MAX_PATH)) return;
-    lstrcatA(path, "\\Documents\\ss_dump.bin");
+    snprintf(name, sizeof(name), "\\Documents\\ss_dump_%08lx.bin", nt->FileHeader.TimeDateStamp);
+    lstrcatA(path, name);
     if (!(f = fopen(path, "wb"))) return;
     zero = calloc(1, 0x1000);
     for (off = 0; off < size; off += 0x1000)
@@ -225,17 +274,17 @@ static void diag_keys(void)
  * The hook looks the action up in the joystick profile instead and writes the
  * HUD image token for that button or axis (*BTN_RT* etc., drawn by Hud.gfx),
  * or a short Xbox label when the HUD has no image for it. */
-#define ADDR_EXPAND_ACTION   0x562350
-#define ADDR_STRING_ASSIGN   0xa16250   /* String::operator=(const char *), thiscall */
-#define ADDR_INPUT_PROFILES  0xd656c8   /* -> object: +0xcf6c count, +0xcf70 profiles */
+#define ADDR_EXPAND_ACTION   (game->expand_action)
+#define ADDR_STRING_ASSIGN   (game->string_assign)   /* String::operator=(const char *), thiscall */
+#define ADDR_INPUT_PROFILES  (game->input_profiles)  /* -> object: +0xcf6c count, +0xcf70 profiles */
 #define PROFILE_SIZE         0x584
 #define PROFILE_TYPE         0x564      /* 1 = keyboard */
 #define BINDING_SIZE         20         /* +8 joystick code, +0xc kind */
 #define JOY_KIND_BUTTON      0
 #define JOY_KIND_AXIS        1
 
-static const BYTE expand_prologue[7] = { 0x6a, 0xff, 0x68, 0x48, 0x6b, 0xb3, 0x00 };
-static const BYTE expand_marker[5] = { 0xbf, 0xa0, 0x0c, 0xbd, 0x00 };  /* mov edi, "ACTION_THROTTLE" at +0x8c */
+/* game->expand_prologue: push -1; push <SEH handler>.
+ * game->expand_marker: mov edi, "ACTION_THROTTLE" at +0x8c. */
 
 typedef void *(__cdecl *expand_fn)(const char *, void *);
 typedef void *(__attribute__((thiscall)) *assign_fn)(void *, const char *);
@@ -300,7 +349,7 @@ static BOOL install_expand_hook(void)
 {
     BYTE *target = (BYTE *)ADDR_EXPAND_ACTION, *tramp;
     DWORD old;
-    if (memcmp(target, expand_prologue, sizeof(expand_prologue)) || memcmp(target + 0x8c, expand_marker, sizeof(expand_marker)))
+    if (memcmp(target, game->expand_prologue, 7) || memcmp(target + 0x8c, game->expand_marker, 5))
         return FALSE;
     tramp = VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (!tramp) return TRUE;
@@ -455,6 +504,46 @@ static void diag_log_bindings(void)
 }
 #endif
 
+/* ---- Native pad support ----
+ * The game classifies DirectInput devices by guidProduct (function at 0x40db10
+ * in the retail build): Xbox 360 pads (wired 045e:028e, wireless receiver
+ * 045e:02a1) get type 0, and with them the game navigates its menus and pauses
+ * by itself. Key emulation on top of that would double every press, so it is
+ * switched off while such a pad is attached. */
+static const GUID iid_directinput8a = { 0xbf798030, 0x483a, 0x4da2, { 0xaa, 0x99, 0x5d, 0x64, 0xed, 0x36, 0x97, 0x00 } };
+
+static BOOL CALLBACK native_pad_cb(LPCDIDEVICEINSTANCEA dev, void *found)
+{
+    DWORD product = dev->guidProduct.Data1;  /* MAKELONG(VID, PID) */
+    if (product == 0x028e045e || product == 0x02a1045e)
+    {
+        *(BOOL *)found = TRUE;
+        return DIENUM_STOP;
+    }
+    return DIENUM_CONTINUE;
+}
+
+static BOOL native_pad_attached(void)
+{
+    static IDirectInput8A *di;
+    static BOOL tried;
+    BOOL found = FALSE;
+    if (!tried)
+    {
+        HMODULE lib = LoadLibraryA("dinput8.dll");
+        HRESULT (WINAPI *create)(HINSTANCE, DWORD, REFIID, void **, IUnknown *);
+        tried = TRUE;
+        create = lib ? (void *)GetProcAddress(lib, "DirectInput8Create") : NULL;
+        if (!create || FAILED(create(GetModuleHandleA(NULL), DIRECTINPUT_VERSION, &iid_directinput8a, (void **)&di, NULL)))
+        {
+            di = NULL;
+            logmsg("DirectInput unavailable, Xbox 360 pad detection disabled");
+        }
+    }
+    if (di) IDirectInput8_EnumDevices(di, DI8DEVCLASS_GAMECTRL, native_pad_cb, &found, DIEDFL_ATTACHEDONLY);
+    return found;
+}
+
 static BOOL in_menu(void)
 {
     return *(volatile DWORD *)ADDR_IN_RACE == 0 || *(volatile DWORD *)ADDR_RACE_PAUSED != 0;
@@ -493,7 +582,8 @@ static void read_inputs(const XGAMEPAD *pad, const BOOL *prev, BOOL *cur)
 static DWORD WINAPI pad_thread(void *arg)
 {
     BOOL prev[IN_COUNT] = {0}, armed[IN_COUNT] = {0}, menu_prev = FALSE, hooked = FALSE, resetting;
-    DWORD next_reset = 0;
+    BOOL native = FALSE;
+    DWORD next_reset = 0, next_native_check = 0;
     DWORD next_repeat[IN_COUNT] = {0};
     int i;
     (void)arg;
@@ -501,6 +591,11 @@ static DWORD WINAPI pad_thread(void *arg)
     if (!exe_matches())
     {
         logmsg("unexpected SplitSecond.exe version, gamepad fix disabled");
+#ifdef DIAG
+        /* Give SecuROM time to decrypt the code, then dump it for porting. */
+        Sleep(60000);
+        diag_dump_image();
+#endif
         return 0;
     }
     load_real();
@@ -532,12 +627,29 @@ static DWORD WINAPI pad_thread(void *arg)
             resetting = reset_step();
             next_reset = now + 1000;
         }
+        if ((LONG)(now - next_native_check) >= 0)
+        {
+            BOOL n = native_pad_attached();
+            if (n != native) logmsg(n ? "Xbox 360 pad attached: the game handles menus itself, key emulation off"
+                                      : "no Xbox 360 pad: key emulation on");
+            native = n;
+            next_native_check = now + 3000;
+        }
         menu = in_menu();
 #ifdef DIAG
         {
             static DWORD tick, snap, start;
             if (!start) start = now;
             diag_keys();
+            if (now - start > 60000) diag_dump_image();
+            if (tick % 200 == 0)
+            {
+                XSTATE probe;
+                DWORD slot, rc[4];
+                for (slot = 0; slot < 4; slot++)
+                    rc[slot] = ((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(slot, &probe);
+                logmsg("XInputGetState rc: %lu %lu %lu %lu", rc[0], rc[1], rc[2], rc[3]);
+            }
             if (tick++ % 50 == 0)
             {
                 logmsg("SNAP %lu FLAGS race=%lu x104=%lu", snap, *(volatile DWORD *)ADDR_IN_RACE, *(volatile DWORD *)ADDR_RACE_PAUSED);
@@ -545,7 +657,7 @@ static DWORD WINAPI pad_thread(void *arg)
             }
         }
 #endif
-        if (((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(0, &st) != ERROR_SUCCESS)
+        if (native || ((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(0, &st) != ERROR_SUCCESS)
             ZeroMemory(&st, sizeof(st));
         read_inputs(&st.Gamepad, prev, cur);
 #ifdef DIAG
@@ -558,7 +670,14 @@ static DWORD WINAPI pad_thread(void *arg)
             BOOL stick = abs(g->sThumbLX) > 12000 || abs(g->sThumbLY) > 12000
                       || abs(g->sThumbRX) > 12000 || abs(g->sThumbRY) > 12000;
             if (g->wButtons != last_buttons || lt != last_lt || rt != last_rt || stick != last_stick)
+            {
+                XSTATE other;
+                DWORD slot;
                 logmsg("PAD buttons=%04x LT=%d RT=%d stick=%d", g->wButtons, lt, rt, stick);
+                for (slot = 1; slot < 4; slot++)
+                    if (((DWORD (WINAPI *)(DWORD, XSTATE *))p_GetState)(slot, &other) == ERROR_SUCCESS)
+                        logmsg("  pad %lu connected, buttons=%04x", slot, other.Gamepad.wButtons);
+            }
             last_buttons = g->wButtons; last_lt = lt; last_rt = rt; last_stick = stick;
         }
 #endif

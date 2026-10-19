@@ -178,8 +178,18 @@ contain it, the text is left alone.
 5. Writes `xinput1_3.dll` and the controls reset marker. A foreign DLL with the same name is kept
    as `.bak`; its own DLL (any version) is recognised by the `SSFIX-XINPUT-PROXY` string inside.
 6. Copies itself to `ssfix/` and puts an uninstall script next to the exe.
+7. Linux only: enables the DLL in the game's Proton prefix, so no launch option is needed. It finds
+   the prefix `compatdata/<appid>` of the Steam version (the library whose `steamapps/common`
+   holds the game, `appmanifest_*.acf` with that `installdir`) or of a non-Steam shortcut (binary
+   `userdata/*/config/shortcuts.vdf`: the entry whose `Exe` or `StartDir` is the game folder,
+   its `appid`), in the native and Flatpak Steam and all library folders. In `pfx/user.reg` it adds
+   `"xinput1_3"="native,builtin"` under `Software\Wine\AppDefaults\SplitSecond.exe\DllOverrides`,
+   unless a `wineserver` is running (Wine would overwrite the file on exit), and lists the changed
+   files in `ssfix/proton-prefixes.txt`.
 
 Running it again first rolls back the previous installation, so the archive does not grow.
 Uninstall restores the table records, truncates the archive to its original size (it then matches
-the original byte for byte) and removes the DLL (restoring a `.bak`), the marker, the script and
-`ssfix/`.
+the original byte for byte) and removes the DLL (restoring a `.bak`), the marker, the script,
+`ssfix/` and the Proton overrides it added. If Steam replaced the archive in the meantime (an
+update, a language change), the saved records no longer match it; they are dropped and the
+archive is left alone.

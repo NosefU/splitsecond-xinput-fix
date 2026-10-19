@@ -63,13 +63,17 @@ No DirectX installation is needed for the fix itself.
    ```
    ./ssfix-install "/home/deck/Games/Split Second"
    ```
-3. In Steam, open the game's **Properties → Launch Options** and add:
-   ```
-   WINEDLLOVERRIDES="xinput1_3=n,b" %command%
-   ```
-   Without it Proton ignores the fix.
-4. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
-5. Start the game.
+3. In Steam Input, use a plain gamepad layout (no keyboard bindings needed).
+4. Start the game.
+
+Proton only loads the fix with a DLL override. The installer adds it to the game's Proton prefix
+by itself, both for the Steam version and for a non-Steam shortcut to the game, and removes it on
+uninstall. If it cannot do that (the game was never started, or is running right now), it says so;
+then start or close the game and run the installer again, or add this to the game's
+**Properties → Launch Options** in Steam:
+```
+WINEDLLOVERRIDES="xinput1_3=n,b" %command%
+```
 
 Both Proton 11.0 and Proton Experimental work. For the Steam version, Proton Experimental makes
 the controller look like an Xbox 360 pad, and the game then navigates its menus by itself; the
@@ -94,7 +98,7 @@ in the game's options afterwards; your changes are kept.
 
 Run **`Uninstall gamepad fix.bat`** (Windows) or **`uninstall-gamepad-fix.sh`** (Linux / Steam
 Deck) in the game folder — the installer puts it there. The game files are restored exactly as
-they were. Then remove the launch option on Steam Deck.
+they were. If you added the launch option by hand, remove it too.
 
 ## Steam updates and language changes
 
@@ -113,7 +117,8 @@ nothing.
 
 - **The installer says the archive differs from the original.** `data/resident.ark` was already
   modified by another mod, or it is a different game version. Restore the original file first.
-- **On Steam Deck nothing changes in the menus.** Check the launch option above.
+- **On Steam Deck nothing changes in the menus.** Check what the installer said about the Proton
+  prefix; if it could not change it, add the launch option above.
 - **Every press in a menu moves two items.** Please open an issue and attach the log: the game
   handles that gamepad by itself, and the fix did not recognise it.
 - The fix writes a log to `Documents\ss_xinput_fix.log` (on Proton: inside the game's prefix,

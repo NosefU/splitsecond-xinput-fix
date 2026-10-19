@@ -32,11 +32,13 @@ Steam Deck / Linux (Proton)
      Или оставьте ssfix-install где угодно и укажите папку игры (путь ниже - только
      пример, замените его на папку, куда установлена ваша игра):
          ./ssfix-install "/home/deck/Games/Split Second"
-  3. В Steam: свойства игры -> Параметры запуска, добавьте:
+  3. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
+  4. Запустите игру. Управление один раз сбросится на раскладку фикса.
+  Установщик сам разрешает Proton загружать DLL фикса: прописывает
+  переопределение в префикс игры (Steam-версии или ярлыка). Если он сообщит, что
+  не смог (игру ещё не запускали или она запущена), запустите или закройте игру и
+  повторите установку, либо добавьте в свойства игры -> Параметры запуска:
          WINEDLLOVERRIDES="xinput1_3=n,b" %command%
-     (без этого Proton не загрузит DLL из папки игры)
-  4. В Steam Input используйте обычную раскладку геймпада, клавиши не нужны.
-  5. Запустите игру. Управление один раз сбросится на раскладку фикса.
 
 С геймпадом Xbox 360 игра сама управляет меню; фикс это замечает и только
 показывает иконки кнопок.
@@ -78,9 +80,11 @@ Steam Deck / Linux: copy ssfix-install into the game folder, open a terminal
 there (Dolphin: right-click -> Open Terminal Here) and run
     ./ssfix-install
 (or run it from anywhere with your game folder as the argument:
-./ssfix-install "/path/to/your/Split Second"). Then add
+./ssfix-install "/path/to/your/Split Second"), use a plain gamepad layout in
+Steam Input. The installer enables the DLL in the game's Proton prefix itself;
+if it reports that it could not, add
     WINEDLLOVERRIDES="xinput1_3=n,b" %command%
-to the game's launch options in Steam, use a plain gamepad layout in Steam Input.
+to the game's launch options in Steam.
 
 On the first start the controls are reset once to the layout the fix expects.
 Steam: changing the language, an update or verifying the game files replace

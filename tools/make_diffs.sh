@@ -1,7 +1,8 @@
 #!/bin/sh
 # Rebuild the patched UI movies from an original resident.ark and write the
 # SSDF diffs the installer applies (patch/*.ssdf).
-#   tools/make_diffs.sh <original resident.ark> <ffdec.jar>
+#   tools/make_diffs.sh <original resident.ark | folder with <hash>.bin> <ffdec.jar>
+# (the folder form takes entries unpacked by arkdump, e.g. on another machine)
 # Needs python3 (no extra modules) and Java for JPEXS FFDec.
 set -eu
 ARK=$1
@@ -10,9 +11,10 @@ PY=${PYTHON:-python3}
 W=build/ui
 mkdir -p "$W" patch
 ffdec() { java -jar "$FFDEC" "$@" 2>&1 | grep -v -e EXPERIMENTAL -e 'Replace AS1/2' || true; }
+extract() { if [ -d "$ARK" ]; then cp "$ARK/$1.bin" "$2"; else $PY tools/ark.py extract "$ARK" "$1" "$2"; fi; }
 
 # UI/CommonUI/Prompt_Bar.gfx: per-button icon sprites showing Xbox glyphs
-$PY tools/ark.py extract "$ARK" 266e5f18 "$W/prompt_bar.orig.gfx"
+extract 266e5f18 "$W/prompt_bar.orig.gfx"
 $PY tools/padicons.py "$W/prompt_bar.orig.gfx" "$W/prompt_bar.stage.gfx"
 # icon sprite ids are assigned from 900 by padicons.py: 901, 904, 907, 910, 913
 ffdec -replace "$W/prompt_bar.stage.gfx" "$W/prompt_bar.gfx" \
@@ -23,7 +25,7 @@ ffdec -replace "$W/prompt_bar.stage.gfx" "$W/prompt_bar.gfx" \
     /DefineSprite_913/frame_1/DoAction ui/padicon_frame1.as
 
 # UI/Frontend/Flash/FE_pressStart_Overlay.gfx: A button instead of "ENTER"
-$PY tools/ark.py extract "$ARK" 51bf9dda "$W/press_start.orig.gfx"
+extract 51bf9dda "$W/press_start.orig.gfx"
 $PY tools/pressstart.py "$W/press_start.orig.gfx" "$W/prompt_bar.orig.gfx" "$W/press_start.stage.gfx"
 ffdec -replace "$W/press_start.stage.gfx" "$W/press_start.gfx" \
     /DefineSprite_3/frame_1/DoAction ui/pressstart_text.as

@@ -145,9 +145,11 @@ shown, with no delay or flicker. The glyph sits in a nested clip `glyph_mc` so t
 The "PRESS ENTER TO START" title screen. The text is the localization key `TEXT_PRESS_START`,
 translated only after the first frame. `tools/pressstart.py` adds a clip with the A button (the
 same shape and atlas as in `Prompt_Bar`) and names the text field `press_txt`. The script
-`ui/pressstart_text.as` waits for the translation, replaces the word `ENTER` with spaces as wide
-as the icon and puts the icon there. Only `ENTER` is searched for: if a translation does not
-contain it, the text is left alone.
+`ui/pressstart_text.as` waits for the translation, replaces the name of the Enter key with spaces
+as wide as the icon and puts the icon there. The translations live in per-language string tables
+(`DICT` entries of `resident.ark`); the key is called `ENTER` in English, German and Russian,
+`ENTRÉE` in French, `INVIO` in Italian and `INTRO` in Spanish, and the script looks for these. If a
+translation contains none of them, the text is left alone.
 
 ### Engine quirks
 

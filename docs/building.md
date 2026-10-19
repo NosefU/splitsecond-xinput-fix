@@ -51,7 +51,9 @@ Requires Python 3 (no extra modules) and Java for
 [JPEXS FFDec](https://github.com/jindrapetrik/jpexs-decompiler), which compiles the ActionScript.
 The script extracts the two movies, builds the modified versions in `build/ui/` and writes
 `patch/prompt_bar.ssdf` and `patch/press_start.ssdf`. The result is deterministic: the same
-archive gives the same bytes.
+archive gives the same bytes (checked with FFDec 26.3.0). Instead of the archive you can pass a
+folder with the two entries unpacked by `tools/arkdump.c` (`266e5f18.bin`, `51bf9dda.bin`), e.g.
+taken from the Steam Deck.
 
 ## CI
 

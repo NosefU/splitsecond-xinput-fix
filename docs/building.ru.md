@@ -50,7 +50,9 @@ tools/make_diffs.sh "<папка игры>/data/resident.ark" path/to/ffdec.jar
 [JPEXS FFDec](https://github.com/jindrapetrik/jpexs-decompiler), которым компилируется
 ActionScript. Скрипт извлекает два ролика, собирает изменённые версии в `build/ui/` и пишет
 `patch/prompt_bar.ssdf` и `patch/press_start.ssdf`. Результат детерминирован: на одном и том же
-архиве получаются те же байты.
+архиве получаются те же байты (проверено с FFDec 26.3.0). Вместо архива можно передать папку с
+двумя записями, распакованными `tools/arkdump.c` (`266e5f18.bin`, `51bf9dda.bin`), например
+взятыми со Steam Deck.
 
 ## CI
 

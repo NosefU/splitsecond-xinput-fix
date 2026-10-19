@@ -1,4 +1,6 @@
-// Show the Xbox A button (mapped to Enter) in place of the word ENTER.
+// Show the Xbox A button (mapped to Enter) in place of the Enter key's name:
+// ENTER (English, German, Russian), ENTREE with an acute E (French), INVIO
+// (Italian), INTRO (Spanish).
 // The field is translated after this frame runs, so wait for the text,
 // then swap the word for spaces as wide as the icon and put the icon there.
 // Exact char boundaries are ink bounds (empty for spaces), so measure the
@@ -6,10 +8,17 @@
 // centre alignment of the line, so add that offset when placing the icon.
 _global.gfxExtensions = true;
 var waitFrames = 0;
+var keyNames = ["ENTER","ENTR\u00C9E","INVIO","INTRO"];
 this.onEnterFrame = function()
 {
    waitFrames++;
-   var at = press_txt.text.indexOf("ENTER");
+   var at = -1;
+   var wordLength = 0;
+   for(var k = 0; k < keyNames.length && at < 0; k++)
+   {
+      at = press_txt.text.indexOf(keyNames[k]);
+      wordLength = keyNames[k].length;
+   }
    if(at >= 0)
    {
       delete this.onEnterFrame;
@@ -27,7 +36,7 @@ this.onEnterFrame = function()
       var gb = glyph.getBounds(this);
       var glyphWidth = gb.xMax - gb.xMin;
       var count = 1;
-      press_txt.replaceText(at,at + 5," ");
+      press_txt.replaceText(at,at + wordLength," ");
       var left = press_txt.getExactCharBoundaries(before);
       var right = press_txt.getExactCharBoundaries(at + count);
       while(count < 12 && right.x - (left.x + left.width) < glyphWidth + 8)

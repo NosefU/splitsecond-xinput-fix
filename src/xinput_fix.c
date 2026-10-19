@@ -20,9 +20,9 @@
  * Xbox 360 pad; then the proxy sends no keys. Without an XInput pad it reads
  * the pad through DirectInput (see "DirectInput").
  *
- * Addresses are known for two builds of SplitSecond.exe (see `builds`): the
- * retail/disc one and the Steam one; with any other exe the proxy only
- * forwards XInput.
+ * Addresses are known for three builds of SplitSecond.exe (see `builds`): the
+ * retail/disc one and the English and Russian Steam ones; with any other exe
+ * the proxy only forwards XInput.
  * Build with -DDIAG for the research build (memory snapshots, image dump).
  *
  * Log: %USERPROFILE%\Documents\ss_xinput_fix.log */
@@ -36,8 +36,9 @@
 /* Lets the installer recognise this DLL, whatever its version. */
 __attribute__((used)) static const char ssfix_marker[] = "SSFIX-XINPUT-PROXY";
 
-/* Per-build addresses. The Steam build has the same code, moved by a few
- * hundred bytes; its .data is 0x1000 lower. */
+/* Per-build addresses. The English Steam build has the same code, moved by a
+ * few hundred bytes; its .data is 0x1000 lower. The Russian Steam build is the
+ * retail one with the Steam DRM wrapper, at the same addresses. */
 typedef struct {
     const char *name;
     DWORD timestamp, image_size;
@@ -54,6 +55,9 @@ static const build_t builds[] = {
     { "steam", 0x4be13c66, 0x1db7000, 0xd4356c, 0xd8b104, 0x561f00, 0xa15bf0, 0xd646c8,
       { 0x6a, 0xff, 0x68, 0x28, 0x60, 0xb3, 0x00 }, { 0xbf, 0x50, 0xfc, 0xbc, 0x00 },
       { { 0xcf5000, 0xa8000 }, { 0x1cc3000, 0x344000 } } },
+    { "steam-russian", 0x4be3ea74, 0x1dbf000, 0xd4456c, 0xd8c104, 0x562350, 0xa16250, 0xd656c8,
+      { 0x6a, 0xff, 0x68, 0x48, 0x6b, 0xb3, 0x00 }, { 0xbf, 0xa0, 0x0c, 0xbd, 0x00 },
+      { { 0xcf6000, 0xa8000 }, { 0x1cc6000, 0x344000 } } },
 };
 static const build_t *game;
 

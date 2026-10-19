@@ -5,18 +5,21 @@
 The fix consists of an `xinput1_3.dll` proxy placed next to `SplitSecond.exe`, changes to two UI
 movies inside `data/resident.ark`, and an installer that applies and removes all of it.
 
-Three builds of `SplitSecond.exe` are supported, all protected by SecuROM:
+Four builds of `SplitSecond.exe` are supported, all protected by SecuROM:
 
 | Build | `TimeDateStamp` | `SizeOfImage` | PE header |
 |---|---|---|---|
 | boxed (retail) | `0x4BE3EA74` | `0x1A64000` | `0xD40` |
-| Steam, English (with an extra Steam DRM section `.bind`) | `0x4BE13C66` | `0x1DB7000` | `0xD20` |
-| Steam, Russian (the retail exe with the Steam DRM wrapper) | `0x4BE3EA74` | `0x1DBF000` | `0xD20` |
+| Steam: English, German, French, Italian, Spanish (with an extra Steam DRM section `.bind`) | `0x4BE13C66` | `0x1DB7000` | `0xD20` |
+| Steam: Russian (the retail exe with the Steam DRM wrapper) | `0x4BE3EA74` | `0x1DBF000` | `0xD20` |
+| Steam: Polish | `0x4BE13CC6` | `0x1DBC000` | `0xD20` |
 
-The code is the same, only moved: in the English Steam build `.data` is `0x1000` lower and the
-functions are a few hundred bytes lower; the Russian Steam build uses the retail addresses. In
-Steam the exe and `data/resident.ark` come with the language depot, so changing the language
-replaces them. The addresses below are for the retail build; the Steam ones are in
+The code is the same, only moved: in the Western and Polish Steam builds `.data` is `0x1000` lower
+and the functions are a few hundred bytes lower; the Russian Steam build uses the retail
+addresses. In Steam the exe and `data/resident.ark` come with the language depot: the five
+Western languages share both files (switching between them only rewrites `ssversion.ini`, and the
+fix stays), while Russian and Polish have their own, so switching to or from them replaces the
+files and the installer has to be run again. The addresses below are for the retail build; the Steam ones are in
 the `builds` table in `src/xinput_fix.c`. They were found with `tools/port_addrs.py` on memory
 dumps of both builds (see [tools](tooling.md)). With any other exe the proxy changes nothing and
 only forwards XInput calls. The two UI movies are byte-identical in all of them.

@@ -3,7 +3,7 @@
  *   ssfix-install [--uninstall] [game folder]
  *
  * Install:
- *   - checks SplitSecond.exe is a supported build (retail, Steam English or Russian);
+ *   - checks SplitSecond.exe is a supported build (retail or Steam, any language);
  *   - patches two UI movies inside data/resident.ark: each original entry is
  *     unpacked, checked against the CRC the diff was made for, the SSDF diff is
  *     applied and the result is appended to the archive; only the entry's
@@ -68,11 +68,13 @@ static int same_file(const char *a, const char *b)
 
 #include "payload.h"  /* generated: payload_dll, payload_diffs */
 
-/* Supported SplitSecond.exe builds: retail (disc) and Steam (English, Russian). */
+/* Supported SplitSecond.exe builds: retail (disc) and Steam. The Steam
+ * English, German, French, Italian and Spanish versions share one exe. */
 static const struct { uint32_t timestamp, image_size; const char *name; } exe_builds[] = {
     { 0x4be3ea74u, 0x1a64000u, "retail" },
-    { 0x4be13c66u, 0x1db7000u, "Steam (English)" },
+    { 0x4be13c66u, 0x1db7000u, "Steam (English/German/French/Italian/Spanish)" },
     { 0x4be3ea74u, 0x1dbf000u, "Steam (Russian)" },
+    { 0x4be13cc6u, 0x1dbc000u, "Steam (Polish)" },
 };
 #define ARK_VERSION     0x10000u
 #define ARK_TABLE       0x18

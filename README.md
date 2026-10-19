@@ -123,9 +123,10 @@ files are then exactly the original ones and Steam can update them safely); afte
 installer again. If Steam has already replaced the files, just run the installer again: it notices
 that and patches the new archive.
 
-The fix supports the English and Russian Steam versions and the boxed release. Other Steam languages
-may come with another `SplitSecond.exe`; then the installer reports it as unsupported and changes
-nothing.
+All seven Steam languages are supported (English, French, German, Italian, Spanish, Polish,
+Russian), as well as the boxed release. English, French, German, Italian and Spanish share the
+same files, so switching between them keeps the fix; switching to or from Polish or Russian
+replaces the files, and the installer has to be run again.
 
 ## Troubleshooting
 
